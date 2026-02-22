@@ -1,0 +1,44 @@
+{
+  "name": "easytouch-macos",
+  "version": "1.0.0",
+  "description": "macOS system automation tool with MCP support (Intel + Apple Silicon)",
+  "author": "MaomiAgent Team",
+  "license": "MIT",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "keywords": [
+    "macos",
+    "automation",
+    "mcp",
+    "mouse",
+    "keyboard",
+    "screenshot",
+    "apple-silicon",
+    "intel"
+  ],
+  "files": [
+    "bin/",
+    "SKILL.md"
+  ],
+  "bin": {
+    "et": "./bin/et",
+    "easytouch": "./bin/et"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "mcp": {
+    "transport": "stdio",
+    "command": "et",
+    "args": ["--mcp"]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maomiaent/easytouch"
+  }
+}

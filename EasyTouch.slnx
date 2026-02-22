@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="EasyTouch-Windows/EasyTouch-Windows.csproj" />
+  <Project Path="EasyTouch-Linux/EasyTouch-Linux.csproj" />
+  <Project Path="EasyTouch-Mac/EasyTouch-Mac.csproj" />
+  <Project Path="EasyTouch.Tests/EasyTouch.Tests.csproj" />
+</Solution>

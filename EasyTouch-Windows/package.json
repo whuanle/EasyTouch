@@ -1,0 +1,55 @@
+{
+  "name": "easytouch-windows",
+  "version": "1.0.0",
+  "description": "Windows system automation tool with MCP support",
+  "author": "MaomiAgent Team",
+  "license": "MIT",
+  "main": "et.exe",
+  "bin": {
+    "et": "et.exe"
+  },
+  "engines": {
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "keywords": [
+    "windows",
+    "automation",
+    "mcp",
+    "mouse",
+    "keyboard",
+    "screenshot",
+    "window-management",
+    "cli",
+    "desktop-automation"
+  ],
+  "mcp": {
+    "transport": "stdio",
+    "command": "et.exe",
+    "args": ["--mcp"]
+  },
+  "files": [
+    "et.exe",
+    "README.md",
+    "SKILL.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "build.bat",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/easytouch-windows.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/easytouch-windows/issues"
+  },
+  "homepage": "https://github.com/yourusername/easytouch-windows#readme"
+}

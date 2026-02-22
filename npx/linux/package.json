@@ -1,0 +1,39 @@
+{
+  "name": "easytouch-linux",
+  "version": "1.0.0",
+  "description": "Linux system automation tool with MCP support",
+  "author": "MaomiAgent Team",
+  "license": "MIT",
+  "main": "et",
+  "bin": {
+    "et": "et"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "keywords": [
+    "linux",
+    "automation",
+    "mcp",
+    "mouse",
+    "keyboard",
+    "screenshot",
+    "window-management"
+  ],
+  "mcp": {
+    "transport": "stdio",
+    "command": "et",
+    "args": ["--mcp"]
+  },
+  "files": [
+    "et",
+    "SKILL.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maomiaent/easytouch"
+  }
+}

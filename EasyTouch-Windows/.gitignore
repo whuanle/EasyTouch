@@ -1,0 +1,34 @@
+# Build outputs
+bin/
+obj/
+dist/
+publish/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userprefs
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Package files
+*.zip
+*.tar.gz
+*.7z
+
+# PDB files (we don't want these in git)
+*.pdb

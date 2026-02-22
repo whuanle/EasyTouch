@@ -1,0 +1,39 @@
+{
+  "name": "easytouch-windows",
+  "version": "1.0.0",
+  "description": "Windows system automation tool with MCP support",
+  "author": "MaomiAgent Team",
+  "license": "MIT",
+  "main": "et.exe",
+  "bin": {
+    "et": "et.exe"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "keywords": [
+    "windows",
+    "automation",
+    "mcp",
+    "mouse",
+    "keyboard",
+    "screenshot",
+    "window-management"
+  ],
+  "mcp": {
+    "transport": "stdio",
+    "command": "et.exe",
+    "args": ["--mcp"]
+  },
+  "files": [
+    "et.exe",
+    "SKILL.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maomiaent/easytouch"
+  }
+}

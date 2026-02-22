@@ -1,0 +1,111 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using EasyTouch.Core.Models;
+
+namespace EasyTouch.Core;
+
+// Register all concrete response types used in the application
+[JsonSerializable(typeof(Request))]
+[JsonSerializable(typeof(Response))]
+[JsonSerializable(typeof(SuccessResponse))]
+[JsonSerializable(typeof(ErrorResponse))]
+
+// Concrete response types - these are the actual types returned by modules
+[JsonSerializable(typeof(SuccessResponse<MousePositionResponse>))]
+[JsonSerializable(typeof(SuccessResponse<PixelColorResponse>))]
+[JsonSerializable(typeof(SuccessResponse<ScreenListResponse>))]
+[JsonSerializable(typeof(SuccessResponse<WindowListResponse>))]
+[JsonSerializable(typeof(SuccessResponse<WindowFindResponse>))]
+[JsonSerializable(typeof(SuccessResponse<ProcessListResponse>))]
+[JsonSerializable(typeof(SuccessResponse<ProcessStartResponse>))]
+[JsonSerializable(typeof(SuccessResponse<SystemInfoResponse>))]
+[JsonSerializable(typeof(SuccessResponse<CpuInfoResponse>))]
+[JsonSerializable(typeof(SuccessResponse<MemoryInfoResponse>))]
+[JsonSerializable(typeof(SuccessResponse<DiskListResponse>))]
+[JsonSerializable(typeof(SuccessResponse<OsInfoResponse>))]
+[JsonSerializable(typeof(SuccessResponse<ClipboardTextResponse>))]
+[JsonSerializable(typeof(SuccessResponse<ClipboardFilesResponse>))]
+[JsonSerializable(typeof(SuccessResponse<VolumeResponse>))]
+[JsonSerializable(typeof(SuccessResponse<AudioDeviceListResponse>))]
+[JsonSerializable(typeof(SuccessResponse<ScreenshotResponse>))]
+[JsonSerializable(typeof(SuccessResponse<KeyStateResponse>))]
+[JsonSerializable(typeof(SuccessResponse<object>))]
+
+// Request types
+[JsonSerializable(typeof(MouseMoveRequest))]
+[JsonSerializable(typeof(MouseClickRequest))]
+[JsonSerializable(typeof(MouseScrollRequest))]
+[JsonSerializable(typeof(MouseDragRequest))]
+[JsonSerializable(typeof(MousePositionResponse))]
+[JsonSerializable(typeof(KeyPressRequest))]
+[JsonSerializable(typeof(KeyComboRequest))]
+[JsonSerializable(typeof(TypeTextRequest))]
+[JsonSerializable(typeof(KeyStateRequest))]
+[JsonSerializable(typeof(KeyStateResponse))]
+[JsonSerializable(typeof(ScreenshotRequest))]
+[JsonSerializable(typeof(ScreenshotResponse))]
+[JsonSerializable(typeof(PixelColorRequest))]
+[JsonSerializable(typeof(PixelColorResponse))]
+[JsonSerializable(typeof(ScreenListResponse))]
+[JsonSerializable(typeof(WindowListRequest))]
+[JsonSerializable(typeof(WindowListResponse))]
+[JsonSerializable(typeof(WindowFindRequest))]
+[JsonSerializable(typeof(WindowFindResponse))]
+[JsonSerializable(typeof(WindowActivateRequest))]
+[JsonSerializable(typeof(WindowShowRequest))]
+[JsonSerializable(typeof(WindowMoveRequest))]
+[JsonSerializable(typeof(WindowSetTopmostRequest))]
+[JsonSerializable(typeof(WindowCloseRequest))]
+[JsonSerializable(typeof(ProcessListRequest))]
+[JsonSerializable(typeof(ProcessListResponse))]
+[JsonSerializable(typeof(ProcessStartRequest))]
+[JsonSerializable(typeof(ProcessStartResponse))]
+[JsonSerializable(typeof(ProcessKillRequest))]
+[JsonSerializable(typeof(SystemInfoResponse))]
+[JsonSerializable(typeof(CpuInfoResponse))]
+[JsonSerializable(typeof(MemoryInfoResponse))]
+[JsonSerializable(typeof(DiskListResponse))]
+[JsonSerializable(typeof(OsInfoResponse))]
+[JsonSerializable(typeof(ClipboardGetTextRequest))]
+[JsonSerializable(typeof(ClipboardSetTextRequest))]
+[JsonSerializable(typeof(ClipboardTextResponse))]
+[JsonSerializable(typeof(ClipboardGetImageRequest))]
+[JsonSerializable(typeof(ClipboardImageResponse))]
+[JsonSerializable(typeof(ClipboardGetFilesRequest))]
+[JsonSerializable(typeof(ClipboardFilesResponse))]
+[JsonSerializable(typeof(ClipboardSetFilesRequest))]
+[JsonSerializable(typeof(ClipboardClearRequest))]
+[JsonSerializable(typeof(VolumeGetRequest))]
+[JsonSerializable(typeof(VolumeSetRequest))]
+[JsonSerializable(typeof(VolumeMuteRequest))]
+[JsonSerializable(typeof(VolumeResponse))]
+[JsonSerializable(typeof(AudioDeviceListRequest))]
+[JsonSerializable(typeof(AudioDeviceListResponse))]
+[JsonSerializable(typeof(AudioDeviceSetDefaultRequest))]
+
+// Model types
+[JsonSerializable(typeof(Point))]
+[JsonSerializable(typeof(Size))]
+[JsonSerializable(typeof(Rect))]
+[JsonSerializable(typeof(WindowInfo))]
+[JsonSerializable(typeof(ScreenInfo))]
+[JsonSerializable(typeof(ProcessInfo))]
+[JsonSerializable(typeof(SystemInfo))]
+[JsonSerializable(typeof(DiskInfo))]
+[JsonSerializable(typeof(CpuInfo))]
+[JsonSerializable(typeof(AudioDeviceInfo))]
+
+// Enum types
+[JsonSerializable(typeof(MouseButton))]
+[JsonSerializable(typeof(WindowShowState))]
+[JsonSerializable(typeof(WindowZOrder))]
+
+// Dictionary and object types for MCP
+[JsonSerializable(typeof(Dictionary<string, JsonElement>))]
+[JsonSerializable(typeof(Dictionary<string, object>))]
+[JsonSerializable(typeof(object))]
+[JsonSerializable(typeof(object[]))]
+
+public partial class JsonContext : JsonSerializerContext
+{
+}
