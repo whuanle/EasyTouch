@@ -4,6 +4,36 @@
 
 支持平台：Windows、Linux、macOS
 
+## 安装方式
+
+### 方式一：NPM 安装（推荐）
+
+```bash
+# 安装对应平台的包
+npm install -g easytouch-windows  # Windows
+npm install -g easytouch-linux    # Linux  
+npm install -g easytouch-macos    # macOS
+```
+
+### 方式二：手动下载
+
+从 [GitHub Releases](https://github.com/yourusername/easytouch/releases) 下载对应平台的可执行文件。
+
+### 方式三：源码构建
+
+```bash
+# Windows
+dotnet publish EasyTouch-Windows -c Release -r win-x64 --self-contained
+
+# Linux  
+dotnet publish EasyTouch-Linux -c Release -r linux-x64 --self-contained
+
+# macOS
+dotnet publish EasyTouch-Mac -c Release -r osx-x64 --self-contained
+```
+
+## 快速开始
+
 ## 功能模块
 
 ### 1. 鼠标控制 (Mouse)
@@ -401,10 +431,10 @@ chmod +x bin/Release/net10.0/osx-x64/publish/et
 **一键构建所有平台**
 ```bash
 # Windows
-build-all.bat
+scripts\build-aot-win-x64.bat
 
 # Linux / macOS
-./build-all.sh
+./scripts/build-aot-unix-x64.sh
 ```
 
 ## 集成到 MCP 客户端
