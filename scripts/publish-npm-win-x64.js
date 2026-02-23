@@ -41,6 +41,11 @@ try {
         const skillMd = fs.readFileSync(skillMdPath, 'utf8');
         fs.writeFileSync(path.join(tempDir, 'SKILL.md'), skillMd);
     }
+    const launcherPath = path.join(projectDir, 'npx', 'windows', 'et-launcher.js');
+    if (fs.existsSync(launcherPath)) {
+        const launcher = fs.readFileSync(launcherPath, 'utf8');
+        fs.writeFileSync(path.join(tempDir, 'et-launcher.js'), launcher);
+    }
     console.log('📋 Copied package template');
 } catch (e) {
     console.error('❌ Error copying package template:', e.message);

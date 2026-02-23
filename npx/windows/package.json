@@ -6,7 +6,8 @@
   "license": "MIT",
   "main": "et.exe",
   "bin": {
-    "et": "et.exe"
+    "et": "et-launcher.js",
+    "easytouch": "et-launcher.js"
   },
   "os": [
     "win32"
@@ -30,6 +31,7 @@
   },
   "files": [
     "et.exe",
+    "et-launcher.js",
     "SKILL.md"
   ],
   "repository": {

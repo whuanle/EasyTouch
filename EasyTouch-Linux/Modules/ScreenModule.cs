@@ -81,10 +81,12 @@ public static class ScreenModule
 
     private static Response ScreenshotWayland(ScreenshotRequest request, string outputPath)
     {
-        try
+        var errors = new List<string>();
+
+        // 1) Try grim first (wlroots compositors)
+        if (CommandExists("grim"))
         {
-            // Try different Wayland screenshot tools
-            if (CommandExists("grim"))
+            try
             {
                 if (request.X.HasValue && request.Y.HasValue && request.Width.HasValue && request.Height.HasValue)
                 {
@@ -94,21 +96,67 @@ public static class ScreenModule
                 {
                     RunCommand("grim", $"\"{outputPath}\"");
                 }
+
+                if (File.Exists(outputPath))
+                {
+                    return new SuccessResponse<ScreenshotResponse>(new ScreenshotResponse
+                    {
+                        Path = outputPath,
+                        Width = request.Width ?? 1920,
+                        Height = request.Height ?? 1080
+                    });
+                }
+
+                errors.Add("grim did not create output file");
             }
-            else if (CommandExists("gnome-screenshot"))
+            catch (Exception ex)
+            {
+                errors.Add($"grim failed: {ex.Message}");
+            }
+        }
+
+        // 2) Fallback to gnome-screenshot (GNOME/KDE environments)
+        if (CommandExists("gnome-screenshot"))
+        {
+            try
             {
                 RunCommand("gnome-screenshot", $"-f \"{outputPath}\"");
+
+                if (File.Exists(outputPath))
+                {
+                    return new SuccessResponse<ScreenshotResponse>(new ScreenshotResponse
+                    {
+                        Path = outputPath,
+                        Width = request.Width ?? 1920,
+                        Height = request.Height ?? 1080
+                    });
+                }
+
+                errors.Add("gnome-screenshot did not create output file");
             }
-            else
+            catch (Exception ex)
             {
-                return new ErrorResponse("No Wayland screenshot tool found. Please install grim or gnome-screenshot.");
+                errors.Add($"gnome-screenshot failed: {ex.Message}");
             }
-            
+        }
+
+        if (!CommandExists("grim") && !CommandExists("gnome-screenshot"))
+        {
+            return new ErrorResponse("No Wayland screenshot tool found. Please install grim or gnome-screenshot.");
+        }
+
+        if (errors.Count > 0)
+        {
+            return new ErrorResponse($"Wayland screenshot failed. Tried tools: {string.Join(" | ", errors)}");
+        }
+
+        try
+        {
             if (!File.Exists(outputPath))
             {
                 return new ErrorResponse("Screenshot file was not created");
             }
-            
+
             return new SuccessResponse<ScreenshotResponse>(new ScreenshotResponse
             {
                 Path = outputPath,

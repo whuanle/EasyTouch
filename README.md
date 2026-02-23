@@ -2,6 +2,12 @@
 
 跨平台系统自动化操作工具，支持 Windows、Linux、macOS。提供 CLI 命令行和 MCP 服务器两种使用方式，支持鼠标键盘控制、屏幕截图、窗口管理、系统信息查询、浏览器操作等功能。
 
+目前：
+
+- [x] Windows
+- [ ] Linux
+- [ ] MAC
+
 
 
 ## 功能概览
@@ -15,6 +21,10 @@
 | 🖥️ 系统信息 | CPU、内存、磁盘、进程 |
 | 📋 剪贴板 | 文本读写、文件列表 |
 | 🌐 浏览器控制 | 启动浏览器、页面导航、元素交互、截图 |
+
+
+
+提示：在 Linux 里，由于桌面环境复杂，因此工具可能会失败。
 
 
 
@@ -39,7 +49,34 @@ npm i @whuanle/easytouch-mac
 
 
 
-测试是否正常工作：
+执行 `et --help` 命令测试是否正常工作：
+
+```
+PS E:\workspace\EasyTouch> et --help
+EasyTouch Windows Automation Tool
+
+Usage: et <command> [options]
+
+Commands:
+  mouse_move --x <n> --y <n> [--relative] [--duration <ms>]
+  mouse_click [--button left|right|middle] [--double]
+  mouse_position
+  key_press --key <key>
+  type_text --text <text> [--interval <ms>] [--human]
+  screenshot [--output <path>] [--x <n>] [--y <n>] [--width <n>] [--height <n>]
+  pixel_color --x <n> --y <n>
+  window_list [--visible-only] [--filter <text>]
+  window_find [--title <text>] [--class <name>] [--pid <n>]
+  window_activate --title <text> | --handle <n>
+  window_foreground
+  os_info, cpu_info, memory_info, disk_list
+  process_list [--filter <text>]
+  clipboard_get_text, clipboard_set_text --text <text>
+
+  help       Show this help
+  version    Show version
+{"success":true}
+```
 
 
 
@@ -65,7 +102,7 @@ npx playwright install chromium
 
 在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异。
 
-通过 npm/bun 等方式安装的 EasyTouch，程序文件在
+通过 npm/bun 等方式安装的 EasyTouch，程序文件在 `C:\Users\{用户名}\AppData\Roaming\npm` 下面。
 
 
 
@@ -114,37 +151,10 @@ npx playwright install chromium
 
 ### 作为 Skills 给 AI 使用
 
-
-
-
-
-### CLI 模式
+只需要执行命令安装 skills 即可。
 
 ```bash
-# 移动鼠标到坐标 (100, 200)
-et mouse_move --x 100 --y 200
-
-# 输入文本（支持中文）
-et type_text --text "你好，世界！"
-
-# 截图并保存
-et screenshot --output screenshot.png
-
-# 获取当前活动窗口
-et window_foreground
-
-# 查看所有命令
-et --help
-```
-
-
-
-### MCP 模式
-
-启动 MCP 服务器：
-
-```bash
-et --mcp
+npx skills add https://github.com/whuanle/EasyTouch/skills
 ```
 
 
@@ -270,6 +280,8 @@ et clipboard_clear
 et clipboard_get_files
 ```
 
+
+
 ### 浏览器控制
 
 ```bash
@@ -300,13 +312,7 @@ et browser_close --browser-id <id>
 
 
 
-## MCP 集成
-
-### Claude Desktop
-
-
-
-### 可用 MCP Tools
+### MCP Tools
 
 | Tool | 描述 |
 |------|------|
@@ -340,16 +346,7 @@ et browser_close --browser-id <id>
 
 更多 MCP 使用文档见 [skills/SKILLS.md](skills/SKILLS.md)
 
-## 技术规格
 
-- **目标框架**: .NET 10
-- **编译方式**: AOT (Ahead-of-Time)
-- **输出**: 单文件可执行程序，无需运行时
-- **文件大小**: ~3-5 MB（依平台而异）
-- **支持平台**:
-  - Windows 10/11 x64
-  - Linux x64（X11，不支持 Wayland）
-  - macOS x64 / ARM64
 
 ## 平台说明
 
@@ -366,29 +363,7 @@ et browser_close --browser-id <id>
 - 需要授予辅助功能权限（系统设置 → 隐私与安全性 → 辅助功能）
 - 截图功能需要屏幕录制权限
 
-## 项目结构
 
-```
-EasyTouch/
-├── EasyTouch-Windows/    # Windows 版本
-├── EasyTouch-Linux/      # Linux 版本
-├── EasyTouch-Mac/        # macOS 版本
-├── EasyTouch.Tests/      # 共享测试
-├── EasyTouch.Tests.*     # 平台特定测试
-├── docs/                 # 文档
-├── skills/               # MCP 技能文档
-├── scripts/              # 构建脚本
-├── npx/                  # NPM 包装器
-└── README.md
-```
-
-## 文档
-
-- [MCP 测试指南](docs/MCP_TEST_GUIDE.md) - MCP 功能测试
-- [NPM 测试指南](docs/NPM_TEST_GUIDE.md) - NPM 包测试
-- [跨平台测试](docs/CROSS_PLATFORM_TESTING.md) - 跨平台测试策略
-- [发布指南](docs/PUBLISHING.md) - NPM 包发布流程
-- [浏览器自动化](skills/BROWSER_SETUP.md) - Playwright 浏览器自动化
 
 ## 许可证
 
