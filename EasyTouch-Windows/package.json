@@ -32,7 +32,9 @@
   "mcp": {
     "transport": "stdio",
     "command": "et.exe",
-    "args": ["--mcp"]
+    "args": [
+      "--mcp"
+    ]
   },
   "files": [
     "et.exe",
@@ -51,5 +53,8 @@
   "bugs": {
     "url": "https://github.com/yourusername/easytouch-windows/issues"
   },
-  "homepage": "https://github.com/yourusername/easytouch-windows#readme"
+  "homepage": "https://github.com/yourusername/easytouch-windows#readme",
+  "dependencies": {
+    "@playwright/test": "^1.58.2"
+  }
 }

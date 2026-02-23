@@ -159,19 +159,7 @@ public static class CliHost
             "clipboard_clear" => ClipboardModule.Clear(new ClipboardClearRequest()),
             "clipboard_get_files" => ClipboardModule.GetFiles(new ClipboardGetFilesRequest()),
             
-            // Audio commands
-            "volume_get" => AudioModule.GetVolume(new VolumeGetRequest()),
-            "volume_set" => AudioModule.SetVolume(new VolumeSetRequest
-            {
-                Level = GetIntOption(options, "level", 50)
-            }),
-            "volume_mute" => AudioModule.SetMute(new VolumeMuteRequest
-            {
-                Mute = GetBoolOption(options, "state", true)
-            }),
-            "audio_devices" => AudioModule.ListDevices(new AudioDeviceListRequest()),
-            
-            // Browser commands
+            // Browser commands (使用 Playwright CLI)
             "browser_launch" => BrowserModule.Launch(new BrowserLaunchRequest
             {
                 BrowserType = GetStringOption(options, "browser", "chromium")!,
@@ -179,74 +167,58 @@ public static class CliHost
                 ExecutablePath = GetStringOption(options, "executable", null),
                 UserDataDir = GetStringOption(options, "user-data-dir", null)
             }),
+            "browser_screenshot" => BrowserModule.Screenshot(new BrowserScreenshotRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                OutputPath = GetStringOption(options, "output", null),
+                FullPage = GetBoolOption(options, "full-page", false)
+            }),
+            "browser_codegen" => BrowserModule.Codegen(new BrowserCodegenRequest
+            {
+                BrowserType = GetStringOption(options, "browser", "chromium"),
+                Url = GetStringOption(options, "url", null),
+                OutputFile = GetStringOption(options, "output", null),
+                Target = GetStringOption(options, "target", "csharp")
+            }),
+            "browser_list" => BrowserModule.List(new BrowserListRequest()),
+            "browser_close" => BrowserModule.Close(new BrowserCloseRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Force = GetBoolOption(options, "force", false)
+            }),
+            
+            // 以下命令在 CLI 模式下不支持
             "browser_navigate" => BrowserModule.Navigate(new BrowserNavigateRequest
             {
                 BrowserId = GetStringOption(options, "browser-id", "")!,
-                Url = GetStringOption(options, "url", "")!,
-                WaitUntil = GetStringOption(options, "wait-until", null),
-                Timeout = GetIntOption(options, "timeout", 30000)
+                Url = GetStringOption(options, "url", "")!
             }),
             "browser_click" => BrowserModule.Click(new BrowserClickRequest
             {
                 BrowserId = GetStringOption(options, "browser-id", "")!,
-                Selector = GetStringOption(options, "selector", "")!,
-                SelectorType = GetStringOption(options, "selector-type", "css"),
-                Button = GetIntOption(options, "button", 0),
-                ClickCount = GetIntOption(options, "click-count", 1),
-                Timeout = GetIntOption(options, "timeout", 30000)
+                Selector = GetStringOption(options, "selector", "")!
             }),
             "browser_fill" => BrowserModule.Fill(new BrowserFillRequest
             {
                 BrowserId = GetStringOption(options, "browser-id", "")!,
                 Selector = GetStringOption(options, "selector", "")!,
-                SelectorType = GetStringOption(options, "selector-type", "css"),
-                Value = GetStringOption(options, "value", "")!,
-                Clear = GetBoolOption(options, "clear", true),
-                Timeout = GetIntOption(options, "timeout", 30000)
+                Value = GetStringOption(options, "value", "")!
             }),
             "browser_find" => BrowserModule.Find(new BrowserFindRequest
             {
                 BrowserId = GetStringOption(options, "browser-id", "")!,
-                Selector = GetStringOption(options, "selector", "")!,
-                SelectorType = GetStringOption(options, "selector-type", "css"),
-                Timeout = GetIntOption(options, "timeout", 5000)
+                Selector = GetStringOption(options, "selector", "")!
             }),
             "browser_get_text" => BrowserModule.GetText(new BrowserGetTextRequest
             {
                 BrowserId = GetStringOption(options, "browser-id", "")!,
-                Selector = GetStringOption(options, "selector", null),
-                SelectorType = GetStringOption(options, "selector-type", "css")
-            }),
-            "browser_screenshot" => BrowserModule.Screenshot(new BrowserScreenshotRequest
-            {
-                BrowserId = GetStringOption(options, "browser-id", "")!,
-                Selector = GetStringOption(options, "selector", null),
-                SelectorType = GetStringOption(options, "selector-type", "css"),
-                OutputPath = GetStringOption(options, "output", null),
-                Type = GetStringOption(options, "type", "png")!,
-                FullPage = GetBoolOption(options, "full-page", false),
-                Quality = GetIntOption(options, "quality", 80)
+                Selector = GetStringOption(options, "selector", null)
             }),
             "browser_evaluate" => BrowserModule.Evaluate(new BrowserEvaluateRequest
             {
                 BrowserId = GetStringOption(options, "browser-id", "")!,
                 Script = GetStringOption(options, "script", "")!
             }),
-            "browser_wait_for" => BrowserModule.WaitFor(new BrowserWaitForRequest
-            {
-                BrowserId = GetStringOption(options, "browser-id", "")!,
-                Selector = GetStringOption(options, "selector", "")!,
-                SelectorType = GetStringOption(options, "selector-type", "css"),
-                State = GetStringOption(options, "state", "visible"),
-                Timeout = GetIntOption(options, "timeout", 30000)
-            }),
-            "browser_close" => BrowserModule.Close(new BrowserCloseRequest
-            {
-                BrowserId = GetStringOption(options, "browser-id", "")!,
-                Force = GetBoolOption(options, "force", false)
-            }),
-            "browser_list" => BrowserModule.List(new BrowserListRequest()),
-            
             _ => new ErrorResponse($"Unknown command: {command}")
         };
     }
@@ -549,7 +521,6 @@ public static class CliHost
         Console.WriteLine("  os_info, cpu_info, memory_info, disk_list");
         Console.WriteLine("  process_list [--filter <text>]");
         Console.WriteLine("  clipboard_get_text, clipboard_set_text --text <text>");
-        Console.WriteLine("  volume_get, volume_set --level <0-100>");
         Console.WriteLine();
         Console.WriteLine("  help       Show this help");
         Console.WriteLine("  version    Show version");

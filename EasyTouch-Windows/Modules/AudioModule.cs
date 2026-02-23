@@ -35,6 +35,13 @@ public static class AudioModule
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, nuint dwExtraInfo);
 
+    // WinMM API for AOT-compatible volume control
+    [DllImport("winmm.dll")]
+    private static extern int waveOutGetVolume(IntPtr hwo, out uint pdwVolume);
+
+    [DllImport("winmm.dll")]
+    private static extern int waveOutSetVolume(IntPtr hwo, uint dwVolume);
+
     private const uint COINIT_APARTMENTTHREADED = 0x2;
     private const uint CLSCTX_ALL = 23; // CLSCTX_INPROC_SERVER | CLSCTX_INPROC_HANDLER | CLSCTX_LOCAL_SERVER | CLSCTX_REMOTE_SERVER
     private const byte VK_VOLUME_MUTE = 0xAD;
@@ -230,6 +237,16 @@ public static class AudioModule
     /// </summary>
     public static Response SetVolume(VolumeSetRequest request)
     {
+        // 检测 AOT 模式
+        if (IsAotMode())
+        {
+            return new ErrorResponse(
+                "Volume control requires COM interop which is not fully supported in AOT mode. " +
+                "Please use VolumeUp/VolumeDown methods for relative control, " +
+                "or run without AOT compilation (dotnet run without -p:PublishAot=true)."
+            );
+        }
+
         object? enumeratorObj = null;
         object? deviceObj = null;
         object? volumeObj = null;
@@ -289,6 +306,16 @@ public static class AudioModule
     /// </summary>
     public static Response SetMute(VolumeMuteRequest request)
     {
+        // 检测 AOT 模式
+        if (IsAotMode())
+        {
+            return new ErrorResponse(
+                "Volume control requires COM interop which is not fully supported in AOT mode. " +
+                "Please use VolumeUp/VolumeDown methods for relative control, " +
+                "or run without AOT compilation (dotnet run without -p:PublishAot=true)."
+            );
+        }
+
         object? enumeratorObj = null;
         object? deviceObj = null;
         object? volumeObj = null;

@@ -268,22 +268,22 @@ const TEST_CASES = {
     common: [
         { name: '版本检查', args: ['--version'], expectSuccess: true, checkOutput: false },
         { name: '帮助信息', args: ['--help'], expectSuccess: true, checkOutput: false },
-        { name: '鼠标位置', args: ['mouse_position'], expectSuccess: true, checkKeys: ['X', 'Y'] },
+        { name: '鼠标位置', args: ['mouse_position'], expectSuccess: true, checkKeys: ['x', 'y'] },
         { name: '鼠标移动', args: ['mouse_move', '--x', '100', '--y', '100'], expectSuccess: true },
         { name: '鼠标点击', args: ['mouse_click'], expectSuccess: true },
         { name: '鼠标滚轮', args: ['mouse_scroll', '--amount', '3'], expectSuccess: true, optional: true },
         { name: '按键测试', args: ['key_press', '--key', 'a'], expectSuccess: true },
         { name: '输入文本', args: ['type_text', '--text', 'Hello'], expectSuccess: true },
-        { name: '系统信息', args: ['os_info'], expectSuccess: true, checkKeys: ['Version', 'Architecture'] },
+        { name: '系统信息', args: ['os_info'], expectSuccess: true, checkKeys: ['version', 'architecture'] },
         { name: 'CPU信息', args: ['cpu_info'], expectSuccess: true },
         { name: '内存信息', args: ['memory_info'], expectSuccess: true },
-        { name: '显示器列表', args: ['screen_list'], expectSuccess: true, checkKeys: ['Screens'] },
-        { name: '像素颜色', args: ['pixel_color', '--x', '100', '--y', '100'], expectSuccess: true, checkKeys: ['R', 'G', 'B'] },
+        { name: '显示器列表', args: ['screen_list'], expectSuccess: true, checkKeys: ['screens'] },
+        { name: '像素颜色', args: ['pixel_color', '--x', '100', '--y', '100'], expectSuccess: true, checkKeys: ['r', 'g', 'b'] },
         { name: '截图功能', args: ['screenshot', '--output', path.join(os.tmpdir(), 'et_test.png')], expectSuccess: true, cleanup: (args) => {
             try { fs.unlinkSync(args[args.indexOf('--output') + 1]); } catch {}
         }},
-        { name: '进程列表', args: ['process_list'], expectSuccess: true, checkKeys: ['Processes'] },
-        { name: '磁盘列表', args: ['disk_list'], expectSuccess: true, checkKeys: ['Disks'] },
+        { name: '进程列表', args: ['process_list'], expectSuccess: true, checkKeys: ['processes'] },
+        { name: '磁盘列表', args: ['disk_list'], expectSuccess: true, checkKeys: ['disks'] },
         { name: '剪贴板写入', args: ['clipboard_set_text', '--text', 'Test123'], expectSuccess: true },
         { name: '剪贴板读取', args: ['clipboard_get_text'], expectSuccess: true, checkOutput: 'Test123' },
         { name: '剪贴板清空', args: ['clipboard_clear'], expectSuccess: true, optional: true },
@@ -291,7 +291,7 @@ const TEST_CASES = {
         { name: '无效命令', args: ['invalid_command_xyz'], expectSuccess: false },
     ],
     windows: [
-        { name: '窗口列表', args: ['window_list'], expectSuccess: true, checkKeys: ['Windows'] },
+        { name: '窗口列表', args: ['window_list'], expectSuccess: true, checkKeys: ['windows'] },
         { name: '前台窗口', args: ['window_foreground'], expectSuccess: true },
         { name: '查找窗口', args: ['window_find', '--title', 'Task Manager'], expectSuccess: true, optional: true },
         { name: '窗口最小化', args: ['window_minimize'], expectSuccess: true, verify: async (result) => {
@@ -304,15 +304,41 @@ const TEST_CASES = {
             await sleep(500);
             return true;
         }},
-        { name: '获取音量', args: ['volume_get'], expectSuccess: true },
-        { name: '设置音量50', args: ['volume_set', '--level', '50'], expectSuccess: true },
-        { name: '静音开关', args: ['volume_mute', '--state', 'true'], expectSuccess: true, verify: async (result, runCmd) => {
-            // 静音后取消静音，恢复原状
-            await sleep(200);
-            await runCmd(['volume_mute', '--state', 'false']);
-            return true;
+        // Browser tests - 使用 Playwright CLI（npx playwright）
+        { name: '浏览器列表', args: ['browser_list'], expectSuccess: true, checkKeys: ['browsers'] },
+        { name: '启动浏览器', args: ['browser_launch', '--browser', 'chromium', '--headless'], expectSuccess: true, verify: async (result) => {
+            // 验证返回了 browserId (嵌套在 data 字段中)
+            if (result.success) {
+                try {
+                    const parsed = JSON.parse(result.output);
+                    if (parsed.data && parsed.data.browserId) {
+                        global.testBrowserId = parsed.data.browserId;
+                        return true;
+                    }
+                } catch {}
+            }
+            global.testBrowserId = null;
+            return false;
         }},
-        { name: '音频设备', args: ['audio_devices'], expectSuccess: true, checkKeys: ['Devices'] },
+        { name: '浏览器截图', args: ['browser_screenshot'], expectSuccess: true, verify: async (result, runCmd) => {
+            if (!global.testBrowserId) return false;
+            const outputPath = path.join(os.tmpdir(), 'et_browser_test.png');
+            const screenshotResult = await runCmd(['browser_screenshot', '--browser-id', global.testBrowserId, '--output', outputPath]);
+            if (screenshotResult.success) {
+                try { 
+                    if (fs.existsSync(outputPath)) {
+                        fs.unlinkSync(outputPath); 
+                    }
+                } catch {}
+            }
+            return screenshotResult.success;
+        }},
+        { name: '关闭浏览器', args: ['browser_close'], expectSuccess: true, verify: async (result, runCmd) => {
+            if (!global.testBrowserId) return false;
+            const closeResult = await runCmd(['browser_close', '--browser-id', global.testBrowserId]);
+            global.testBrowserId = null;
+            return closeResult.success;
+        }},
     ],
     linux: [
         { name: '系统运行时间', args: ['uptime'], expectSuccess: true, optional: true },
