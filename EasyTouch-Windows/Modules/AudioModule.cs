@@ -1,108 +1,21 @@
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using EasyTouch.Core.Models;
 
 namespace EasyTouch.Modules;
 
 /// <summary>
 /// Windows 音频控制模块 - 使用 Core Audio API (COM)
-/// 参考 C++ 实现：IAudioEndpointVolume 接口
+/// 使用 AOT 兼容的 COM 激活方式
 /// </summary>
 public static class AudioModule
 {
-    #region COM Interfaces (只定义必要的方法)
+    #region COM GUIDs
 
-    [ComImport]
-    [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDeviceEnumerator
-    {
-        // 我们不使用这些方法，但必须声明它们来保持 vtable 顺序
-        void NotImpl1(); // EnumAudioEndpoints
-        
-        [PreserveSig]
-        int GetDefaultAudioEndpoint(DataFlow dataFlow, Role role, out IMMDevice endpoint);
-        
-        void NotImpl2(); // GetDevice
-        void NotImpl3(); // RegisterEndpointNotificationCallback
-        void NotImpl4(); // UnregisterEndpointNotificationCallback
-    }
-
-    [ComImport]
-    [Guid("D666063F-1587-4E43-81F1-B948E807363F")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDevice
-    {
-        [PreserveSig]
-        int Activate(ref Guid iid, CLSCTX clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object interfacePointer);
-        
-        void NotImpl1(); // OpenPropertyStore
-        void NotImpl2(); // GetId
-        void NotImpl3(); // GetState
-    }
-
-    [ComImport]
-    [Guid("5CDF2C82-841E-4546-9722-0CF74078229A")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IAudioEndpointVolume
-    {
-        void NotImpl1(); // RegisterControlChangeNotify
-        void NotImpl2(); // UnregisterControlChangeNotify
-        void NotImpl3(); // GetChannelCount
-        void NotImpl4(); // SetMasterVolumeLevel
-        
-        [PreserveSig]
-        int SetMasterVolumeLevelScalar(float level, Guid eventContext);
-        
-        void NotImpl5(); // GetMasterVolumeLevel
-        
-        [PreserveSig]
-        int GetMasterVolumeLevelScalar(out float level);
-        
-        void NotImpl6(); // SetChannelVolumeLevel
-        void NotImpl7(); // SetChannelVolumeLevelScalar
-        void NotImpl8(); // GetChannelVolumeLevel
-        void NotImpl9(); // GetChannelVolumeLevelScalar
-        
-        [PreserveSig]
-        int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, Guid eventContext);
-        
-        [PreserveSig]
-        int GetMute(out bool mute);
-        
-        void NotImpl10(); // GetVolumeStepInfo
-        void NotImpl11(); // VolumeStepUp
-        void NotImpl12(); // VolumeStepDown
-        void NotImpl13(); // QueryHardwareSupport
-        void NotImpl14(); // GetVolumeRange
-    }
-
-    [ComImport]
-    [Guid("1BE09788-6894-4089-8586-9A2A6C265AC5")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDeviceCollection
-    {
-        [PreserveSig]
-        int GetCount(out uint count);
-        
-        [PreserveSig]
-        int Item(uint index, out IMMDevice device);
-    }
-
-    #endregion
-
-    #region Enums
-
-    private enum DataFlow { eRender, eCapture, eAll }
-    private enum Role { eConsole, eMultimedia, eCommunications }
-    
-    [Flags]
-    private enum CLSCTX : uint
-    {
-        INPROC_SERVER = 0x1,
-        INPROC_HANDLER = 0x2,
-        LOCAL_SERVER = 0x4,
-        ALL = 0x17
-    }
+    private static readonly Guid CLSID_MMDeviceEnumerator = new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E");
+    private static readonly Guid IID_IMMDeviceEnumerator = new Guid("A95664D2-9614-4F35-A746-DE8DB63617E6");
+    private static readonly Guid IID_IAudioEndpointVolume = new Guid("5CDF2C82-841E-4546-9722-0CF74078229A");
+    private static readonly Guid GUID_NULL = Guid.Empty;
 
     #endregion
 
@@ -111,52 +24,171 @@ public static class AudioModule
     [DllImport("ole32.dll")]
     private static extern int CoInitializeEx(IntPtr pvReserved, uint dwCoInit);
 
+    [DllImport("ole32.dll")]
+    private static extern int CoCreateInstance(
+        [MarshalAs(UnmanagedType.LPStruct)] Guid rclsid,
+        [MarshalAs(UnmanagedType.IUnknown)] object? pUnkOuter,
+        uint dwClsContext,
+        [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+        [MarshalAs(UnmanagedType.IUnknown)] out object ppv);
+
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, nuint dwExtraInfo);
 
     private const uint COINIT_APARTMENTTHREADED = 0x2;
+    private const uint CLSCTX_ALL = 23; // CLSCTX_INPROC_SERVER | CLSCTX_INPROC_HANDLER | CLSCTX_LOCAL_SERVER | CLSCTX_REMOTE_SERVER
     private const byte VK_VOLUME_MUTE = 0xAD;
     private const byte VK_VOLUME_DOWN = 0xAE;
     private const byte VK_VOLUME_UP = 0xAF;
     private const uint KEYEVENTF_KEYUP = 0x0002;
-    private static readonly Guid GUID_NULL = Guid.Empty;
+
+    #endregion
+
+    #region COM Interfaces
+
+    [ComImport]
+    [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IMMDeviceEnumerator
+    {
+        void NotImpl1();
+        
+        [PreserveSig]
+        int GetDefaultAudioEndpoint(DataFlow dataFlow, Role role, out IMMDevice endpoint);
+        
+        void NotImpl2();
+        void NotImpl3();
+        void NotImpl4();
+    }
+
+    [ComImport]
+    [Guid("D666063F-1587-4E43-81F1-B948E807363F")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IMMDevice
+    {
+        [PreserveSig]
+        int Activate(ref Guid iid, uint clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object interfacePointer);
+        
+        void NotImpl1();
+        void NotImpl2();
+        void NotImpl3();
+    }
+
+    [ComImport]
+    [Guid("5CDF2C82-841E-4546-9722-0CF74078229A")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IAudioEndpointVolume
+    {
+        void NotImpl1();
+        void NotImpl2();
+        void NotImpl3();
+        void NotImpl4();
+        
+        [PreserveSig]
+        int SetMasterVolumeLevelScalar(float level, Guid eventContext);
+        
+        void NotImpl5();
+        
+        [PreserveSig]
+        int GetMasterVolumeLevelScalar(out float level);
+        
+        void NotImpl6();
+        void NotImpl7();
+        void NotImpl8();
+        void NotImpl9();
+        
+        [PreserveSig]
+        int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, Guid eventContext);
+        
+        [PreserveSig]
+        int GetMute(out bool mute);
+        
+        void NotImpl10();
+        void NotImpl11();
+        void NotImpl12();
+        void NotImpl13();
+        void NotImpl14();
+    }
+
+    private enum DataFlow { eRender, eCapture, eAll }
+    private enum Role { eConsole, eMultimedia, eCommunications }
 
     #endregion
 
     /// <summary>
+    /// 检测是否在 AOT 模式下运行
+    /// </summary>
+    private static bool IsAotMode()
+    {
+        // 在 AOT 模式下，Assembly.GetExecutingAssembly().Location 为空或特定值
+        // 或者检查 RuntimeFeature.IsDynamicCodeSupported
+        try
+        {
+            // 尝试创建一个简单的 COM 对象来检测是否支持 COM
+            // 如果抛出 InvalidOperationException，说明在 AOT 模式下
+            return !RuntimeFeature.IsDynamicCodeSupported;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    /// <summary>
     /// 获取系统音量（0-100）
+    /// 使用 CoCreateInstance 直接创建 COM 对象（AOT 兼容）
     /// </summary>
     public static Response GetVolume(VolumeGetRequest request)
     {
-        IAudioEndpointVolume? volume = null;
-        IMMDevice? device = null;
-        IMMDeviceEnumerator? enumerator = null;
+        // 检测 AOT 模式
+        if (IsAotMode())
+        {
+            return new ErrorResponse(
+                "Volume control requires COM interop which is not fully supported in AOT mode. " +
+                "Please use VolumeUp/VolumeDown methods for relative control, " +
+                "or run without AOT compilation (dotnet run without -p:PublishAot=true)."
+            );
+        }
+
+        object? enumeratorObj = null;
+        object? deviceObj = null;
+        object? volumeObj = null;
 
         try
         {
-            CoInitializeEx(IntPtr.Zero, COINIT_APARTMENTTHREADED);
+            // 初始化 COM
+            int hr = CoInitializeEx(IntPtr.Zero, COINIT_APARTMENTTHREADED);
+            
+            // 使用 CoCreateInstance 创建 COM 对象（AOT 兼容）
+            Guid iidEnumerator = IID_IMMDeviceEnumerator;
+            hr = CoCreateInstance(
+                CLSID_MMDeviceEnumerator,
+                null,
+                CLSCTX_ALL,
+                iidEnumerator,
+                out enumeratorObj);
 
-            // 创建设备枚举器: CoCreateInstance(__uuidof(MMDeviceEnumerator), ...)
-            var type = Type.GetTypeFromCLSID(new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E"));
-            enumerator = (IMMDeviceEnumerator?)Activator.CreateInstance(type!);
+            if (hr != 0 || enumeratorObj == null)
+                return new ErrorResponse($"Failed to create MMDeviceEnumerator. HRESULT: 0x{hr:X8}");
 
-            if (enumerator == null)
-                return new ErrorResponse("Failed to create MMDeviceEnumerator");
+            var enumerator = (IMMDeviceEnumerator)enumeratorObj;
 
-            // 获取默认音频设备: GetDefaultAudioEndpoint(eRender, eMultimedia, &pDevice)
-            int hr = enumerator.GetDefaultAudioEndpoint(DataFlow.eRender, Role.eMultimedia, out device);
+            // 获取默认音频设备
+            hr = enumerator.GetDefaultAudioEndpoint(DataFlow.eRender, Role.eMultimedia, out var device);
             if (hr != 0 || device == null)
                 return new ErrorResponse($"Failed to get default audio endpoint. HRESULT: 0x{hr:X8}");
 
-            // 激活 IAudioEndpointVolume: pDevice->Activate(__uuidof(IAudioEndpointVolume), ...)
-            Guid iid = new Guid("5CDF2C82-841E-4546-9722-0CF74078229A");
-            hr = device.Activate(ref iid, CLSCTX.ALL, IntPtr.Zero, out object? volumeObj);
+            deviceObj = device;
+
+            // 激活 IAudioEndpointVolume 接口
+            Guid iidVolume = IID_IAudioEndpointVolume;
+            hr = device.Activate(ref iidVolume, CLSCTX_ALL, IntPtr.Zero, out volumeObj);
             if (hr != 0 || volumeObj == null)
                 return new ErrorResponse($"Failed to activate IAudioEndpointVolume. HRESULT: 0x{hr:X8}");
 
-            volume = (IAudioEndpointVolume)volumeObj;
+            var volume = (IAudioEndpointVolume)volumeObj;
 
-            // 获取音量: pAudioEndpointVolume->GetMasterVolumeLevelScalar(&volume)
+            // 获取音量
             hr = volume.GetMasterVolumeLevelScalar(out float level);
             if (hr != 0)
                 return new ErrorResponse($"Failed to get volume. HRESULT: 0x{hr:X8}");
@@ -172,15 +204,24 @@ public static class AudioModule
                 IsMuted = isMuted
             });
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("ComInterop"))
+        {
+            return new ErrorResponse(
+                "COM interop is not supported in AOT mode. " +
+                "Please use VolumeUp/VolumeDown/SetMute methods for volume control, " +
+                "or disable AOT compilation."
+            );
+        }
         catch (Exception ex)
         {
             return new ErrorResponse($"Get volume failed: {ex.Message}");
         }
         finally
         {
-            if (volume != null) Marshal.ReleaseComObject(volume);
-            if (device != null) Marshal.ReleaseComObject(device);
-            if (enumerator != null) Marshal.ReleaseComObject(enumerator);
+            // 释放 COM 对象
+            if (volumeObj != null) Marshal.ReleaseComObject(volumeObj);
+            if (deviceObj != null) Marshal.ReleaseComObject(deviceObj);
+            if (enumeratorObj != null) Marshal.ReleaseComObject(enumeratorObj);
         }
     }
 
@@ -189,34 +230,43 @@ public static class AudioModule
     /// </summary>
     public static Response SetVolume(VolumeSetRequest request)
     {
-        IAudioEndpointVolume? volume = null;
-        IMMDevice? device = null;
-        IMMDeviceEnumerator? enumerator = null;
+        object? enumeratorObj = null;
+        object? deviceObj = null;
+        object? volumeObj = null;
 
         try
         {
             CoInitializeEx(IntPtr.Zero, COINIT_APARTMENTTHREADED);
+            
+            int hr = CoCreateInstance(
+                CLSID_MMDeviceEnumerator,
+                null,
+                CLSCTX_ALL,
+                IID_IMMDeviceEnumerator,
+                out enumeratorObj);
 
-            var type = Type.GetTypeFromCLSID(new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E"));
-            enumerator = (IMMDeviceEnumerator?)Activator.CreateInstance(type!);
+            if (hr != 0 || enumeratorObj == null)
+                return new ErrorResponse($"Failed to create MMDeviceEnumerator. HRESULT: 0x{hr:X8}");
 
-            if (enumerator == null)
-                return new ErrorResponse("Failed to create MMDeviceEnumerator");
+            var enumerator = (IMMDeviceEnumerator)enumeratorObj;
 
-            int hr = enumerator.GetDefaultAudioEndpoint(DataFlow.eRender, Role.eMultimedia, out device);
+            hr = enumerator.GetDefaultAudioEndpoint(DataFlow.eRender, Role.eMultimedia, out var device);
             if (hr != 0 || device == null)
                 return new ErrorResponse($"Failed to get default audio endpoint. HRESULT: 0x{hr:X8}");
 
-            Guid iid = new Guid("5CDF2C82-841E-4546-9722-0CF74078229A");
-            hr = device.Activate(ref iid, CLSCTX.ALL, IntPtr.Zero, out object? volumeObj);
+            deviceObj = device;
+
+            Guid iidVolume = IID_IAudioEndpointVolume;
+            hr = device.Activate(ref iidVolume, CLSCTX_ALL, IntPtr.Zero, out volumeObj);
             if (hr != 0 || volumeObj == null)
                 return new ErrorResponse($"Failed to activate IAudioEndpointVolume. HRESULT: 0x{hr:X8}");
 
-            volume = (IAudioEndpointVolume)volumeObj;
+            var volume = (IAudioEndpointVolume)volumeObj;
 
-            // 设置音量: pAudioEndpointVolume->SetMasterVolumeLevelScalar(fVolume, &GUID_NULL)
+            // 设置音量
             float level = Math.Clamp(request.Level, 0, 100) / 100.0f;
-            hr = volume.SetMasterVolumeLevelScalar(level, GUID_NULL);
+            Guid guidNull = GUID_NULL;
+            hr = volume.SetMasterVolumeLevelScalar(level, guidNull);
             if (hr != 0)
                 return new ErrorResponse($"Failed to set volume. HRESULT: 0x{hr:X8}");
 
@@ -228,9 +278,9 @@ public static class AudioModule
         }
         finally
         {
-            if (volume != null) Marshal.ReleaseComObject(volume);
-            if (device != null) Marshal.ReleaseComObject(device);
-            if (enumerator != null) Marshal.ReleaseComObject(enumerator);
+            if (volumeObj != null) Marshal.ReleaseComObject(volumeObj);
+            if (deviceObj != null) Marshal.ReleaseComObject(deviceObj);
+            if (enumeratorObj != null) Marshal.ReleaseComObject(enumeratorObj);
         }
     }
 
@@ -239,33 +289,41 @@ public static class AudioModule
     /// </summary>
     public static Response SetMute(VolumeMuteRequest request)
     {
-        IAudioEndpointVolume? volume = null;
-        IMMDevice? device = null;
-        IMMDeviceEnumerator? enumerator = null;
+        object? enumeratorObj = null;
+        object? deviceObj = null;
+        object? volumeObj = null;
 
         try
         {
             CoInitializeEx(IntPtr.Zero, COINIT_APARTMENTTHREADED);
+            
+            int hr = CoCreateInstance(
+                CLSID_MMDeviceEnumerator,
+                null,
+                CLSCTX_ALL,
+                IID_IMMDeviceEnumerator,
+                out enumeratorObj);
 
-            var type = Type.GetTypeFromCLSID(new Guid("BCDE0395-E52F-467C-8E3D-C4579291692E"));
-            enumerator = (IMMDeviceEnumerator?)Activator.CreateInstance(type!);
+            if (hr != 0 || enumeratorObj == null)
+                return new ErrorResponse($"Failed to create MMDeviceEnumerator. HRESULT: 0x{hr:X8}");
 
-            if (enumerator == null)
-                return new ErrorResponse("Failed to create MMDeviceEnumerator");
+            var enumerator = (IMMDeviceEnumerator)enumeratorObj;
 
-            int hr = enumerator.GetDefaultAudioEndpoint(DataFlow.eRender, Role.eMultimedia, out device);
+            hr = enumerator.GetDefaultAudioEndpoint(DataFlow.eRender, Role.eMultimedia, out var device);
             if (hr != 0 || device == null)
                 return new ErrorResponse($"Failed to get default audio endpoint. HRESULT: 0x{hr:X8}");
 
-            Guid iid = new Guid("5CDF2C82-841E-4546-9722-0CF74078229A");
-            hr = device.Activate(ref iid, CLSCTX.ALL, IntPtr.Zero, out object? volumeObj);
+            deviceObj = device;
+
+            Guid iidVolume = IID_IAudioEndpointVolume;
+            hr = device.Activate(ref iidVolume, CLSCTX_ALL, IntPtr.Zero, out volumeObj);
             if (hr != 0 || volumeObj == null)
                 return new ErrorResponse($"Failed to activate IAudioEndpointVolume. HRESULT: 0x{hr:X8}");
 
-            volume = (IAudioEndpointVolume)volumeObj;
+            var volume = (IAudioEndpointVolume)volumeObj;
 
-            // 设置静音: pAudioEndpointVolume->SetMute(TRUE/FALSE, NULL)
-            hr = volume.SetMute(request.Mute, GUID_NULL);
+            Guid guidNull = GUID_NULL;
+            hr = volume.SetMute(request.Mute, guidNull);
             if (hr != 0)
                 return new ErrorResponse($"Failed to set mute. HRESULT: 0x{hr:X8}");
 
@@ -277,9 +335,9 @@ public static class AudioModule
         }
         finally
         {
-            if (volume != null) Marshal.ReleaseComObject(volume);
-            if (device != null) Marshal.ReleaseComObject(device);
-            if (enumerator != null) Marshal.ReleaseComObject(enumerator);
+            if (volumeObj != null) Marshal.ReleaseComObject(volumeObj);
+            if (deviceObj != null) Marshal.ReleaseComObject(deviceObj);
+            if (enumeratorObj != null) Marshal.ReleaseComObject(enumeratorObj);
         }
     }
 
