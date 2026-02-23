@@ -1,0 +1,33 @@
+{
+  "name": "easytouch",
+  "version": "1.0.0",
+  "description": "Cross-platform desktop automation tool with MCP support",
+  "author": "MaomiAgent Team",
+  "license": "MIT",
+  "bin": {
+    "et": "./bin/et",
+    "easytouch": "./bin/et"
+  },
+  "scripts": {
+    "postinstall": "node install.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "automation",
+    "desktop",
+    "mcp",
+    "mouse",
+    "keyboard",
+    "screenshot",
+    "cross-platform"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/maomiaent/easytouch"
+  },
+  "optionalDependencies": {
+    "easytouch-windows": "^1.0.0",
+    "easytouch-linux": "^1.0.0",
+    "easytouch-macos": "^1.0.0"
+  }
+}
