@@ -1,0 +1,98 @@
+// Windows API functions for EasyTouch - CsWin32 Source Generator
+
+// User32 - Mouse & Keyboard
+SetCursorPos
+GetCursorPos
+mouse_event
+keybd_event
+GetAsyncKeyState
+GetKeyState
+
+// User32 - Windows
+GetForegroundWindow
+FindWindowW
+EnumWindows
+GetWindowTextW
+GetWindowTextLengthW
+GetWindowRect
+SetWindowPos
+ShowWindow
+IsWindow
+IsWindowVisible
+IsIconic
+IsZoomed
+GetWindowThreadProcessId
+SetForegroundWindow
+BringWindowToTop
+GetSystemMetrics
+GetDC
+ReleaseDC
+GetDesktopWindow
+
+// User32 - Clipboard
+OpenClipboard
+CloseClipboard
+EmptyClipboard
+GetClipboardData
+SetClipboardData
+IsClipboardFormatAvailable
+GetClipboardSequenceNumber
+GetClipboardOwner
+
+// User32 - Messages
+SendMessageW
+PostMessageW
+RegisterWindowMessageW
+GetMessageW
+PeekMessageW
+TranslateMessage
+DispatchMessageW
+
+// GDI32 - Graphics
+BitBlt
+CreateCompatibleBitmap
+CreateCompatibleDC
+DeleteDC
+DeleteObject
+SelectObject
+GetDeviceCaps
+GetPixel
+CreateDIBSection
+
+// Kernel32 - System
+GetCurrentProcessId
+GetCurrentThreadId
+QueryPerformanceCounter
+QueryPerformanceFrequency
+GetTickCount64
+GetSystemTime
+GetSystemTimeAsFileTime
+GetComputerNameW
+GetUserNameW
+GetVersionExW
+GlobalAlloc
+GlobalLock
+GlobalUnlock
+GlobalFree
+
+// Shell32
+SHGetFolderPathW
+
+// Psapi - Process
+EnumProcesses
+GetModuleBaseNameW
+QueryFullProcessImageNameW
+OpenProcess
+GetProcessMemoryInfo
+
+// WinMM - Audio
+waveOutGetVolume
+waveOutSetVolume
+waveOutGetNumDevs
+waveOutGetDevCaps
+
+// User32 - Input
+GetCursorInfo
+
+// Structs and Enums
+// These will be auto-generated based on function signatures

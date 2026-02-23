@@ -34,6 +34,7 @@ public static class CliHost
                 "clipboard" => HandleClipboard(subArgs),
                 "audio" => HandleAudio(subArgs),
                 "help" or "--help" or "-h" => PrintHelp(),
+                "version" or "--version" or "-v" => PrintVersion(),
                 _ => TryHandleDirectCommand(command, subArgs)
             };
 
@@ -551,7 +552,15 @@ public static class CliHost
         Console.WriteLine("  volume_get, volume_set --level <0-100>");
         Console.WriteLine();
         Console.WriteLine("  help       Show this help");
+        Console.WriteLine("  version    Show version");
         
+        return new SuccessResponse();
+    }
+
+    private static Response PrintVersion()
+    {
+        var version = typeof(CliHost).Assembly.GetName().Version?.ToString() ?? "1.0.0";
+        Console.WriteLine(version);
         return new SuccessResponse();
     }
 
@@ -565,6 +574,6 @@ public static class CliHost
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
         
-        Console.WriteLine(JsonSerializer.Serialize(result, result.GetType(), JsonContext.Default));
+        Console.WriteLine(JsonSerializer.Serialize(result, result.GetType(), options));
     }
 }

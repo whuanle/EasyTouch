@@ -206,9 +206,11 @@ public class CliIntegrationTests
         Assert.Contains("Disks", output);
     }
 
-    [Fact]
+    [Fact(Skip = "Lock screen test skipped to avoid disrupting automated testing")]
     public void Test_Lock_Screen()
     {
+        // ⚠️ WARNING: This test is skipped because it locks the screen
+        // which would disrupt automated testing environments
         var (exitCode, output, error) = RunCommand("lock_screen");
         Assert.Contains("Success", output);
     }
@@ -220,5 +222,41 @@ public class CliIntegrationTests
         
         Assert.NotEqual(0, exitCode);
         Assert.Contains("Unknown", output);
+    }
+
+    [Fact]
+    public void Test_Mouse_Scroll()
+    {
+        var (exitCode, output, error) = RunCommand("mouse_scroll", "--amount", "3");
+        
+        Assert.Equal(0, exitCode);
+        Assert.True(IsSuccess(output), $"Command failed: {output}");
+    }
+
+    [Fact]
+    public void Test_Clipboard_Clear()
+    {
+        var (exitCode, output, error) = RunCommand("clipboard_clear");
+        
+        Assert.Equal(0, exitCode);
+        Assert.True(IsSuccess(output), $"Command failed: {output}");
+    }
+
+    [Fact]
+    public void Test_System_Uptime()
+    {
+        var (exitCode, output, error) = RunCommand("uptime");
+        
+        // 某些系统可能不支持
+        Assert.Contains("Success", output);
+    }
+
+    [Fact]
+    public void Test_Battery_Info()
+    {
+        var (exitCode, output, error) = RunCommand("battery_info");
+        
+        // 台式机可能没有电池
+        Assert.Contains("Success", output);
     }
 }

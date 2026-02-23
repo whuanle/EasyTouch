@@ -6,6 +6,7 @@ public class MouseMoveRequest : Request
     public int Y { get; set; }
     public bool Relative { get; set; } = false;
     public int Duration { get; set; } = 0;
+    public bool HumanLike { get; set; } = false;
 }
 
 public class MouseClickRequest : Request
@@ -27,6 +28,7 @@ public class MouseDragRequest : Request
     public int EndX { get; set; }
     public int EndY { get; set; }
     public MouseButton Button { get; set; } = MouseButton.Left;
+    public bool HumanLike { get; set; } = false;
 }
 
 public class MousePositionResponse

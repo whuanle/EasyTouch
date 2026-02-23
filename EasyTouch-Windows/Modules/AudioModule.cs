@@ -3,270 +3,228 @@ using EasyTouch.Core.Models;
 
 namespace EasyTouch.Modules;
 
+/// <summary>
+/// Windows 音频控制模块 - 使用 Win32 API (waveOut + 多媒体键)
+/// </summary>
 public static class AudioModule
 {
-    private static readonly Guid CLSID_MMDeviceEnumerator = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
-    private static readonly Guid IID_IMMDeviceEnumerator = new("A95664D2-9614-4F35-A746-DE8DB63617E6");
+    #region Win32 API Imports
 
-    [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDeviceEnumerator
+    [DllImport("winmm.dll", SetLastError = true)]
+    private static extern int waveOutGetVolume(nint hwo, out uint pdwVolume);
+
+    [DllImport("winmm.dll", SetLastError = true)]
+    private static extern int waveOutSetVolume(nint hwo, uint dwVolume);
+
+    [DllImport("user32.dll")]
+    private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, nuint dwExtraInfo);
+
+    [DllImport("winmm.dll")]
+    private static extern uint waveOutGetNumDevs();
+
+    [DllImport("winmm.dll", CharSet = CharSet.Unicode)]
+    private static extern int waveOutGetDevCaps(uint uDeviceID, ref WAVEOUTCAPS pwoc, uint cbwoc);
+
+    // 虚拟键码
+    private const byte VK_VOLUME_MUTE = 0xAD;
+    private const byte VK_VOLUME_DOWN = 0xAE;
+    private const byte VK_VOLUME_UP = 0xAF;
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WAVEOUTCAPS
     {
-        [PreserveSig]
-        int EnumAudioEndpoints(EDataFlow dataFlow, DeviceState stateMask, out IMMDeviceCollection devices);
-
-        [PreserveSig]
-        int GetDefaultAudioEndpoint(EDataFlow dataFlow, ERole role, out IMMDevice endpoint);
-
-        [PreserveSig]
-        int GetDevice(string pwstrId, out IMMDevice device);
-
-        [PreserveSig]
-        int RegisterEndpointNotificationCallback(nint pClient);
-
-        [PreserveSig]
-        int UnregisterEndpointNotificationCallback(nint pClient);
+        public ushort wMid;
+        public ushort wPid;
+        public uint vDriverVersion;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szPname;
+        public uint dwFormats;
+        public ushort wChannels;
+        public ushort wReserved1;
+        public uint dwSupport;
     }
 
-    [ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDeviceCollection
-    {
-        [PreserveSig]
-        int GetCount(out uint pcDevices);
+    #endregion
 
-        [PreserveSig]
-        int Item(uint nDevice, out IMMDevice device);
-    }
-
-    [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IMMDevice
-    {
-        [PreserveSig]
-        int Activate(ref Guid iid, CLSCTX clsCtx, nint pActivationParams, [MarshalAs(UnmanagedType.IUnknown)] out object ppInterface);
-
-        [PreserveSig]
-        int OpenPropertyStore(StorageAccessMode stgmAccess, out nint ppProperties);
-
-        [PreserveSig]
-        int GetId([MarshalAs(UnmanagedType.LPWStr)] out string ppstrId);
-
-        [PreserveSig]
-        int GetState(out DeviceState pdwState);
-    }
-
-    [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IAudioEndpointVolume
-    {
-        [PreserveSig]
-        int RegisterControlChangeNotify(nint pNotify);
-
-        [PreserveSig]
-        int UnregisterControlChangeNotify(nint pNotify);
-
-        [PreserveSig]
-        int GetChannelCount(out uint pnChannelCount);
-
-        [PreserveSig]
-        int SetMasterVolumeLevel(float fLevelDB, nint pguidEventContext);
-
-        [PreserveSig]
-        int SetMasterVolumeLevelScalar(float fLevel, nint pguidEventContext);
-
-        [PreserveSig]
-        int GetMasterVolumeLevel(out float pfLevelDB);
-
-        [PreserveSig]
-        int GetMasterVolumeLevelScalar(out float pfLevel);
-
-        [PreserveSig]
-        int SetChannelVolumeLevel(uint nChannel, float fLevelDB, nint pguidEventContext);
-
-        [PreserveSig]
-        int SetChannelVolumeLevelScalar(uint nChannel, float fLevel, nint pguidEventContext);
-
-        [PreserveSig]
-        int GetChannelVolumeLevel(uint nChannel, out float pfLevelDB);
-
-        [PreserveSig]
-        int GetChannelVolumeLevelScalar(uint nChannel, out float pfLevel);
-
-        [PreserveSig]
-        int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, nint pguidEventContext);
-
-        [PreserveSig]
-        int GetMute([MarshalAs(UnmanagedType.Bool)] out bool pbMute);
-
-        [PreserveSig]
-        int GetVolumeStepInfo(out uint pnStep, out uint pnStepCount);
-
-        [PreserveSig]
-        int VolumeStepUp(nint pguidEventContext);
-
-        [PreserveSig]
-        int VolumeStepDown(nint pguidEventContext);
-
-        [PreserveSig]
-        int QueryHardwareSupport(out uint pdwHardwareSupportMask);
-
-        [PreserveSig]
-        int GetVolumeRange(out float pflVolumeMindB, out float pflVolumeMaxdB, out float pflVolumeIncrementdB);
-    }
-
-    private enum EDataFlow
-    {
-        eRender,
-        eCapture,
-        eAll
-    }
-
-    private enum ERole
-    {
-        eConsole,
-        eMultimedia,
-        eCommunications
-    }
-
-    private enum DeviceState
-    {
-        Active = 0x00000001,
-        Disabled = 0x00000002,
-        NotPresent = 0x00000004,
-        Unplugged = 0x00000008,
-        All = 0x0000000F
-    }
-
-    private enum CLSCTX
-    {
-        INPROC_SERVER = 0x1,
-        INPROC_HANDLER = 0x2,
-        LOCAL_SERVER = 0x4,
-        INPROC_SERVER16 = 0x8,
-        REMOTE_SERVER = 0x10,
-        INPROC_HANDLER16 = 0x20,
-        RESERVED1 = 0x40,
-        RESERVED2 = 0x80,
-        RESERVED3 = 0x100,
-        RESERVED4 = 0x200,
-        NO_CODE_DOWNLOAD = 0x400,
-        RESERVED5 = 0x800,
-        NO_CUSTOM_MARSHAL = 0x1000,
-        ENABLE_CODE_DOWNLOAD = 0x2000,
-        NO_FAILURE_LOG = 0x4000,
-        DISABLE_AAA = 0x8000,
-        ENABLE_AAA = 0x10000,
-        FROM_DEFAULT_CONTEXT = 0x20000,
-        ACTIVATE_X86_SERVER = 0x40000,
-        ACTIVATE_32_BIT_SERVER = ACTIVATE_X86_SERVER,
-        ACTIVATE_64_BIT_SERVER = 0x80000,
-        ENABLE_CLOAKING = 0x100000,
-        APPCONTAINER = 0x400000,
-        ACTIVATE_AAA_AS_IU = 0x800000,
-        RESERVED6 = 0x1000000,
-        ACTIVATE_ARM32_SERVER = 0x2000000,
-        PS_DLL = unchecked((int)0x80000000),
-        ALL = INPROC_SERVER | INPROC_HANDLER | LOCAL_SERVER | INPROC_SERVER16 | REMOTE_SERVER | INPROC_HANDLER16
-    }
-
-    private enum StorageAccessMode
-    {
-        Read,
-        Write,
-        ReadWrite
-    }
-
-    [DllImport("ole32.dll")]
-    private static extern int CoCreateInstance(ref Guid rclsid, nint pUnkOuter, uint dwClsContext, ref Guid riid, [MarshalAs(UnmanagedType.IUnknown)] out object ppv);
-
+    /// <summary>
+    /// 获取系统音量（0-100）
+    /// 使用 waveOut API 尝试获取，如果失败返回错误
+    /// </summary>
     public static Response GetVolume(VolumeGetRequest request)
     {
         try
         {
-            var volume = GetDefaultEndpointVolume(EDataFlow.eRender);
-            if (volume == null)
-                return new ErrorResponse("Failed to get audio endpoint");
+            // hwo = 0 表示主音量设备
+            int result = waveOutGetVolume(0, out uint volume);
+            
+            if (result != 0)
+            {
+                // 错误码解释：
+                // 5 = ERROR_ACCESS_DENIED (可能需要管理员权限)
+                // 11 = MMSYSERR_NODRIVER (没有驱动)
+                // 其他错误
+                return new ErrorResponse(
+                    $"Failed to get volume. Error code: {result}. " +
+                    "This typically means the waveOut API cannot access the system master volume on modern Windows. " +
+                    "Consider using multimedia keys for relative volume control instead."
+                );
+            }
 
-            volume.GetMasterVolumeLevelScalar(out float level);
-            volume.GetMute(out bool mute);
+            // 解析音量值（16-bit 左声道 + 16-bit 右声道）
+            ushort left = (ushort)(volume >> 16);
+            ushort right = (ushort)(volume & 0xFFFF);
+            
+            // 计算平均音量（0-65535 转换为 0-100）
+            double avgVolume = (left + right) / 2.0;
+            int level = (int)((avgVolume / 65535.0) * 100);
+            
+            // 判断是否静音
+            bool isMuted = (left == 0 && right == 0);
 
             return new SuccessResponse<VolumeResponse>(new VolumeResponse
             {
-                Level = (int)(level * 100),
-                IsMuted = mute
+                Level = level,
+                IsMuted = isMuted
             });
         }
         catch (Exception ex)
         {
-            return new ErrorResponse(ex.Message);
+            return new ErrorResponse($"Get volume failed: {ex.Message}");
         }
     }
 
+    /// <summary>
+    /// 设置系统音量（0-100）
+    /// 使用 waveOut API 尝试设置，如果失败返回错误
+    /// </summary>
     public static Response SetVolume(VolumeSetRequest request)
     {
         try
         {
-            var volume = GetDefaultEndpointVolume(EDataFlow.eRender);
-            if (volume == null)
-                return new ErrorResponse("Failed to get audio endpoint");
-
-            float level = Math.Clamp(request.Level, 0, 100) / 100.0f;
-            volume.SetMasterVolumeLevelScalar(level, 0);
+            // 将 0-100 转换为 0-65535
+            int level = Math.Clamp(request.Level, 0, 100);
+            ushort volumeLevel = (ushort)((level / 100.0) * 65535);
+            
+            // 组合左右声道（高 16 位左声道，低 16 位右声道）
+            uint volume = ((uint)volumeLevel << 16) | volumeLevel;
+            
+            int result = waveOutSetVolume(0, volume);
+            
+            if (result != 0)
+            {
+                return new ErrorResponse(
+                    $"Failed to set volume. Error code: {result}. " +
+                    "This typically means the waveOut API cannot control the system master volume on modern Windows. " +
+                    "Consider using VolumeUp/VolumeDown methods for relative control."
+                );
+            }
 
             return new SuccessResponse();
         }
         catch (Exception ex)
         {
-            return new ErrorResponse(ex.Message);
+            return new ErrorResponse($"Set volume failed: {ex.Message}");
         }
     }
 
+    /// <summary>
+    /// 设置静音状态
+    /// 使用多媒体键（系统级，不受 waveOut 限制）
+    /// </summary>
     public static Response SetMute(VolumeMuteRequest request)
     {
         try
         {
-            var volume = GetDefaultEndpointVolume(EDataFlow.eRender);
-            if (volume == null)
-                return new ErrorResponse("Failed to get audio endpoint");
-
-            volume.SetMute(request.Mute, 0);
-
+            // 发送静音键（切换状态）
+            keybd_event(VK_VOLUME_MUTE, 0, 0, 0);
+            keybd_event(VK_VOLUME_MUTE, 0, KEYEVENTF_KEYUP, 0);
+            
             return new SuccessResponse();
         }
         catch (Exception ex)
         {
-            return new ErrorResponse(ex.Message);
+            return new ErrorResponse($"Set mute failed: {ex.Message}");
         }
     }
 
+    /// <summary>
+    /// 增加音量（使用多媒体键）
+    /// </summary>
+    public static Response VolumeUp(int steps = 1)
+    {
+        try
+        {
+            for (int i = 0; i < steps; i++)
+            {
+                keybd_event(VK_VOLUME_UP, 0, 0, 0);
+                keybd_event(VK_VOLUME_UP, 0, KEYEVENTF_KEYUP, 0);
+                Thread.Sleep(50);
+            }
+            return new SuccessResponse();
+        }
+        catch (Exception ex)
+        {
+            return new ErrorResponse($"Volume up failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 降低音量（使用多媒体键）
+    /// </summary>
+    public static Response VolumeDown(int steps = 1)
+    {
+        try
+        {
+            for (int i = 0; i < steps; i++)
+            {
+                keybd_event(VK_VOLUME_DOWN, 0, 0, 0);
+                keybd_event(VK_VOLUME_DOWN, 0, KEYEVENTF_KEYUP, 0);
+                Thread.Sleep(50);
+            }
+            return new SuccessResponse();
+        }
+        catch (Exception ex)
+        {
+            return new ErrorResponse($"Volume down failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 列出音频设备
+    /// </summary>
     public static Response ListDevices(AudioDeviceListRequest request)
     {
         try
         {
             var devices = new List<AudioDeviceInfo>();
             
-            var enumerator = CreateDeviceEnumerator();
-            if (enumerator == null)
-                return new ErrorResponse("Failed to create device enumerator");
+            // 添加默认设备
+            devices.Add(new AudioDeviceInfo(
+                "default",
+                "Default Audio Device",
+                true,
+                false,
+                0
+            ));
 
-            enumerator.EnumAudioEndpoints(EDataFlow.eRender, DeviceState.Active, out var collection);
-            collection.GetCount(out uint count);
-
-            var defaultDevice = GetDefaultDevice(enumerator, EDataFlow.eRender);
-            string? defaultId = null;
-            defaultDevice?.GetId(out defaultId);
-
-            for (uint i = 0; i < count; i++)
+            // 获取 waveOut 设备数量
+            uint numDevices = waveOutGetNumDevs();
+            
+            // 枚举所有设备
+            for (uint i = 0; i < numDevices; i++)
             {
-                collection.Item(i, out var device);
-                device.GetId(out string id);
-                
-                var props = GetDeviceProperties(device);
-                
-                devices.Add(new AudioDeviceInfo(
-                    id,
-                    props.name,
-                    id == defaultId,
-                    false,
-                    0
-                ));
+                var caps = new WAVEOUTCAPS();
+                if (waveOutGetDevCaps(i, ref caps, (uint)Marshal.SizeOf<WAVEOUTCAPS>()) == 0)
+                {
+                    devices.Add(new AudioDeviceInfo(
+                        i.ToString(),
+                        caps.szPname,
+                        false,
+                        false,
+                        0
+                    ));
+                }
             }
 
             return new SuccessResponse<AudioDeviceListResponse>(new AudioDeviceListResponse
@@ -276,55 +234,7 @@ public static class AudioModule
         }
         catch (Exception ex)
         {
-            return new ErrorResponse(ex.Message);
-        }
-    }
-
-    private static IMMDeviceEnumerator? CreateDeviceEnumerator()
-    {
-        Guid clsid = CLSID_MMDeviceEnumerator;
-        Guid iid = IID_IMMDeviceEnumerator;
-        int hr = CoCreateInstance(ref clsid, 0, (uint)CLSCTX.ALL, ref iid, out object obj);
-        if (hr < 0) return null;
-        return (IMMDeviceEnumerator)obj;
-    }
-
-    private static IAudioEndpointVolume? GetDefaultEndpointVolume(EDataFlow dataFlow)
-    {
-        var enumerator = CreateDeviceEnumerator();
-        if (enumerator == null) return null;
-
-        var device = GetDefaultDevice(enumerator, dataFlow);
-        if (device == null) return null;
-
-        Guid iid = typeof(IAudioEndpointVolume).GUID;
-        device.Activate(ref iid, CLSCTX.ALL, 0, out object volumeObj);
-        return (IAudioEndpointVolume)volumeObj;
-    }
-
-    private static IMMDevice? GetDefaultDevice(IMMDeviceEnumerator enumerator, EDataFlow dataFlow)
-    {
-        int hr = enumerator.GetDefaultAudioEndpoint(dataFlow, ERole.eMultimedia, out var device);
-        if (hr < 0) return null;
-        return device;
-    }
-
-    private static (string name, bool isMuted, float volume) GetDeviceProperties(IMMDevice device)
-    {
-        try
-        {
-            Guid iid = typeof(IAudioEndpointVolume).GUID;
-            device.Activate(ref iid, CLSCTX.ALL, 0, out object volumeObj);
-            var volume = (IAudioEndpointVolume)volumeObj;
-
-            volume.GetMasterVolumeLevelScalar(out float vol);
-            volume.GetMute(out bool mute);
-
-            return ("Device", mute, vol);
-        }
-        catch
-        {
-            return ("Device", false, 0);
+            return new ErrorResponse($"List devices failed: {ex.Message}");
         }
     }
 }

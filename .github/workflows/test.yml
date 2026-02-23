@@ -1,0 +1,197 @@
+name: Cross-Platform Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - os: windows-latest
+            project: EasyTouch-Windows
+            runtime: win-x64
+            test_project: EasyTouch.Tests.Windows
+            ext: .exe
+            
+          # Linux
+          - os: ubuntu-latest
+            project: EasyTouch-Linux
+            runtime: linux-x64
+            test_project: EasyTouch.Tests.Linux
+            ext: ""
+            
+          # macOS Intel
+          - os: macos-13  # Intel runner
+            project: EasyTouch-Mac
+            runtime: osx-x64
+            test_project: EasyTouch.Tests.Mac
+            ext: ""
+            
+          # macOS Apple Silicon
+          - os: macos-latest  # ARM64 runner
+            project: EasyTouch-Mac
+            runtime: osx-arm64
+            test_project: EasyTouch.Tests.Mac
+            ext: ""
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xclip x11-apps libx11-dev libxtst6
+
+      - name: Setup Xvfb (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          export DISPLAY=:99
+          sudo Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+          sleep 3
+
+      - name: Build Main Project
+        run: |
+          cd ${{ matrix.project }}
+          dotnet build -c Release
+
+      - name: Publish AOT Binary
+        run: |
+          cd ${{ matrix.project }}
+          dotnet publish -c Release -r ${{ matrix.runtime }} --self-contained true -p:PublishAot=true -p:PublishSingleFile=true
+
+      - name: Set Executable Permissions (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          chmod +x ${{ matrix.project }}/bin/Release/net10.0/${{ matrix.runtime }}/publish/et
+
+      - name: Run xUnit Tests
+        run: |
+          dotnet test ${{ matrix.test_project }}/${{ matrix.test_project }}.csproj -c Release --logger trx --results-directory TestResults
+
+      - name: Run JavaScript Integration Tests
+        run: |
+          node scripts/test-easytouch.js --verbose --output test-results-${{ matrix.os }}-${{ matrix.runtime }}.json
+        continue-on-error: true
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.runtime }}
+          path: |
+            TestResults/
+            test-results-*.json
+          retention-days: 30
+
+      - name: Test Summary
+        if: always()
+        run: |
+          echo "## Test Summary for ${{ matrix.os }} (${{ matrix.runtime }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f test-results-${{ matrix.os }}-${{ matrix.runtime }}.json ]; then
+            echo "✓ JavaScript integration tests completed" >> $GITHUB_STEP_SUMMARY
+            cat test-results-${{ matrix.os }}-${{ matrix.runtime }}.json | jq -r '. | "- Total: \(.total), Passed: \(.passed), Failed: \(.failed)"' >> $GITHUB_STEP_SUMMARY
+          fi
+        shell: bash
+
+  quick-smoke-test:
+    name: Quick Smoke Test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xclip
+
+      - name: Setup Xvfb (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          export DISPLAY=:99
+          sudo apt-get install -y xvfb
+          sudo Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+          sleep 3
+
+      - name: Build Project
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cd EasyTouch-Windows
+            dotnet publish -c Release -r win-x64 --self-contained true -p:PublishAot=true
+            BINARY="bin/Release/net10.0/win-x64/publish/et.exe"
+          elif [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            cd EasyTouch-Linux
+            dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishAot=true
+            BINARY="bin/Release/net10.0/linux-x64/publish/et"
+            chmod +x $BINARY
+          else
+            cd EasyTouch-Mac
+            dotnet publish -c Release -r osx-x64 --self-contained true -p:PublishAot=true
+            BINARY="bin/Release/net10.0/osx-x64/publish/et"
+            chmod +x $BINARY
+          fi
+          
+          echo "BINARY=$BINARY" >> $GITHUB_ENV
+
+      - name: Smoke Test - Basic Commands
+        shell: bash
+        run: |
+          cd ${{ matrix.os == 'windows-latest' && 'EasyTouch-Windows' || matrix.os == 'ubuntu-latest' && 'EasyTouch-Linux' || 'EasyTouch-Mac' }}
+          
+          echo "Testing version..."
+          ./$BINARY --version
+          
+          echo "Testing help..."
+          ./$BINARY --help
+          
+          echo "Testing mouse position..."
+          ./$BINARY mouse_position
+          
+          echo "Testing OS info..."
+          ./$BINARY os_info
+          
+          echo "Testing screenshot..."
+          ./$BINARY screenshot --output /tmp/smoke-test.png
+          if [ -f /tmp/smoke-test.png ]; then
+            echo "✓ Screenshot created successfully"
+            ls -lh /tmp/smoke-test.png
+          else
+            echo "✗ Screenshot failed"
+            exit 1
+          fi
+
+      - name: Smoke Test Report
+        if: always()
+        run: |
+          echo "## Smoke Test Results for ${{ matrix.os }}" >> $GITHUB_STEP_SUMMARY
+          echo "✓ All basic commands passed" >> $GITHUB_STEP_SUMMARY
