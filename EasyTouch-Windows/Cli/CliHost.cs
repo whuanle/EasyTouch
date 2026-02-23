@@ -170,6 +170,82 @@ public static class CliHost
             }),
             "audio_devices" => AudioModule.ListDevices(new AudioDeviceListRequest()),
             
+            // Browser commands
+            "browser_launch" => BrowserModule.Launch(new BrowserLaunchRequest
+            {
+                BrowserType = GetStringOption(options, "browser", "chromium")!,
+                Headless = GetBoolOption(options, "headless", false),
+                ExecutablePath = GetStringOption(options, "executable", null),
+                UserDataDir = GetStringOption(options, "user-data-dir", null)
+            }),
+            "browser_navigate" => BrowserModule.Navigate(new BrowserNavigateRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Url = GetStringOption(options, "url", "")!,
+                WaitUntil = GetStringOption(options, "wait-until", null),
+                Timeout = GetIntOption(options, "timeout", 30000)
+            }),
+            "browser_click" => BrowserModule.Click(new BrowserClickRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Selector = GetStringOption(options, "selector", "")!,
+                SelectorType = GetStringOption(options, "selector-type", "css"),
+                Button = GetIntOption(options, "button", 0),
+                ClickCount = GetIntOption(options, "click-count", 1),
+                Timeout = GetIntOption(options, "timeout", 30000)
+            }),
+            "browser_fill" => BrowserModule.Fill(new BrowserFillRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Selector = GetStringOption(options, "selector", "")!,
+                SelectorType = GetStringOption(options, "selector-type", "css"),
+                Value = GetStringOption(options, "value", "")!,
+                Clear = GetBoolOption(options, "clear", true),
+                Timeout = GetIntOption(options, "timeout", 30000)
+            }),
+            "browser_find" => BrowserModule.Find(new BrowserFindRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Selector = GetStringOption(options, "selector", "")!,
+                SelectorType = GetStringOption(options, "selector-type", "css"),
+                Timeout = GetIntOption(options, "timeout", 5000)
+            }),
+            "browser_get_text" => BrowserModule.GetText(new BrowserGetTextRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Selector = GetStringOption(options, "selector", null),
+                SelectorType = GetStringOption(options, "selector-type", "css")
+            }),
+            "browser_screenshot" => BrowserModule.Screenshot(new BrowserScreenshotRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Selector = GetStringOption(options, "selector", null),
+                SelectorType = GetStringOption(options, "selector-type", "css"),
+                OutputPath = GetStringOption(options, "output", null),
+                Type = GetStringOption(options, "type", "png")!,
+                FullPage = GetBoolOption(options, "full-page", false),
+                Quality = GetIntOption(options, "quality", 80)
+            }),
+            "browser_evaluate" => BrowserModule.Evaluate(new BrowserEvaluateRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Script = GetStringOption(options, "script", "")!
+            }),
+            "browser_wait_for" => BrowserModule.WaitFor(new BrowserWaitForRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Selector = GetStringOption(options, "selector", "")!,
+                SelectorType = GetStringOption(options, "selector-type", "css"),
+                State = GetStringOption(options, "state", "visible"),
+                Timeout = GetIntOption(options, "timeout", 30000)
+            }),
+            "browser_close" => BrowserModule.Close(new BrowserCloseRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Force = GetBoolOption(options, "force", false)
+            }),
+            "browser_list" => BrowserModule.List(new BrowserListRequest()),
+            
             _ => new ErrorResponse($"Unknown command: {command}")
         };
     }
