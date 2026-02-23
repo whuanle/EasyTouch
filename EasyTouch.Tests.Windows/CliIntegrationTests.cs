@@ -241,42 +241,21 @@ public class CliIntegrationTests
     [Fact]
     public void Test_Volume_Get()
     {
-        // 尝试获取音量 - 在现代 Windows 上可能失败
+        // 使用 Core Audio API (COM) 获取音量
         var result = AudioModule.GetVolume(new VolumeGetRequest());
+        Assert.True(result.Success, $"Get volume failed: {result}");
         
-        // 如果成功，验证返回值范围
-        if (result.Success)
-        {
-            var successResult = Assert.IsType<SuccessResponse<VolumeResponse>>(result);
-            Assert.True(successResult.Data.Level >= 0 && successResult.Data.Level <= 100, 
-                "Volume level should be between 0 and 100");
-        }
-        else
-        {
-            // 在现代 Windows 上，waveOut API 可能无法访问系统主音量
-            // 这是预期行为，不视为测试失败
-            Assert.Contains("waveOut API", result.ToString());
-        }
+        var successResult = Assert.IsType<SuccessResponse<VolumeResponse>>(result);
+        Assert.True(successResult.Data.Level >= 0 && successResult.Data.Level <= 100, 
+            "Volume level should be between 0 and 100");
     }
 
     [Fact]
     public void Test_Volume_Set()
     {
-        // 尝试设置音量 - 在现代 Windows 上可能失败
+        // 使用 Core Audio API (COM) 设置音量
         var result = AudioModule.SetVolume(new VolumeSetRequest { Level = 50 });
-        
-        // 如果成功，验证设置
-        if (result.Success)
-        {
-            // 设置成功
-            Assert.True(result.Success);
-        }
-        else
-        {
-            // 在现代 Windows 上，waveOut API 可能无法控制系统主音量
-            // 这是预期行为，不视为测试失败
-            Assert.Contains("waveOut API", result.ToString());
-        }
+        Assert.True(result.Success, $"Set volume failed: {result}");
     }
 
     [Fact]
