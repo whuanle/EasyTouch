@@ -341,10 +341,74 @@ const TEST_CASES = {
         }},
     ],
     linux: [
+        // 鼠标操作（跨平台）
+        { name: '鼠标位置', args: ['mouse_position'], expectSuccess: true, checkKeys: ['x', 'y'], optional: true },
+        { name: '鼠标移动', args: ['mouse_move', '--x', '100', '--y', '100'], expectSuccess: true, optional: true },
+        { name: '鼠标点击', args: ['mouse_click'], expectSuccess: true, optional: true },
+        
+        // 键盘操作（跨平台）
+        { name: '按键测试', args: ['key_press', '--key', 'a'], expectSuccess: true, optional: true },
+        { name: '输入文本', args: ['type_text', '--text', 'Hello'], expectSuccess: true, optional: true },
+        
+        // 系统信息（跨平台）
+        { name: '系统信息', args: ['os_info'], expectSuccess: true, checkKeys: ['version', 'architecture'], optional: true },
+        { name: 'CPU信息', args: ['cpu_info'], expectSuccess: true, optional: true },
+        { name: '内存信息', args: ['memory_info'], expectSuccess: true, optional: true },
+        { name: '进程列表', args: ['process_list'], expectSuccess: true, checkKeys: ['processes'], optional: true },
+        { name: '磁盘列表', args: ['disk_list'], expectSuccess: true, checkKeys: ['disks'], optional: true },
+        
+        // 屏幕操作（跨平台）
+        { name: '显示器列表', args: ['screen_list'], expectSuccess: true, checkKeys: ['screens'], optional: true },
+        { name: '像素颜色', args: ['pixel_color', '--x', '100', '--y', '100'], expectSuccess: true, checkKeys: ['r', 'g', 'b'], optional: true },
+        { name: '截图功能', args: ['screenshot', '--output', path.join(os.tmpdir(), 'et_test_linux.png')], expectSuccess: true, optional: true, cleanup: (args) => {
+            try { fs.unlinkSync(args[args.indexOf('--output') + 1]); } catch {}
+        }},
+        
+        // 剪贴板（跨平台）
+        { name: '剪贴板写入', args: ['clipboard_set_text', '--text', 'LinuxTest123'], expectSuccess: true, optional: true },
+        { name: '剪贴板读取', args: ['clipboard_get_text'], expectSuccess: true, checkOutput: 'LinuxTest123', optional: true },
+        { name: '剪贴板清空', args: ['clipboard_clear'], expectSuccess: true, optional: true },
+        
+        // 浏览器（需要 Playwright）
+        { name: '浏览器列表', args: ['browser_list'], expectSuccess: true, checkKeys: ['browsers'], optional: true },
+        
+        // Linux 特定
         { name: '系统运行时间', args: ['uptime'], expectSuccess: true, optional: true },
         { name: '电池信息', args: ['battery_info'], expectSuccess: true, optional: true },
     ],
     mac: [
+        // 鼠标操作（跨平台）
+        { name: '鼠标位置', args: ['mouse_position'], expectSuccess: true, checkKeys: ['x', 'y'], optional: true },
+        { name: '鼠标移动', args: ['mouse_move', '--x', '100', '--y', '100'], expectSuccess: true, optional: true },
+        { name: '鼠标点击', args: ['mouse_click'], expectSuccess: true, optional: true },
+        
+        // 键盘操作（跨平台）
+        { name: '按键测试', args: ['key_press', '--key', 'a'], expectSuccess: true, optional: true },
+        { name: '输入文本', args: ['type_text', '--text', 'Hello'], expectSuccess: true, optional: true },
+        
+        // 系统信息（跨平台）
+        { name: '系统信息', args: ['os_info'], expectSuccess: true, checkKeys: ['version', 'architecture'], optional: true },
+        { name: 'CPU信息', args: ['cpu_info'], expectSuccess: true, optional: true },
+        { name: '内存信息', args: ['memory_info'], expectSuccess: true, optional: true },
+        { name: '进程列表', args: ['process_list'], expectSuccess: true, checkKeys: ['processes'], optional: true },
+        { name: '磁盘列表', args: ['disk_list'], expectSuccess: true, checkKeys: ['disks'], optional: true },
+        
+        // 屏幕操作（跨平台）
+        { name: '显示器列表', args: ['screen_list'], expectSuccess: true, checkKeys: ['screens'], optional: true },
+        { name: '像素颜色', args: ['pixel_color', '--x', '100', '--y', '100'], expectSuccess: true, checkKeys: ['r', 'g', 'b'], optional: true },
+        { name: '截图功能', args: ['screenshot', '--output', path.join(os.tmpdir(), 'et_test_mac.png')], expectSuccess: true, optional: true, cleanup: (args) => {
+            try { fs.unlinkSync(args[args.indexOf('--output') + 1]); } catch {}
+        }},
+        
+        // 剪贴板（跨平台）
+        { name: '剪贴板写入', args: ['clipboard_set_text', '--text', 'MacTest123'], expectSuccess: true, optional: true },
+        { name: '剪贴板读取', args: ['clipboard_get_text'], expectSuccess: true, checkOutput: 'MacTest123', optional: true },
+        { name: '剪贴板清空', args: ['clipboard_clear'], expectSuccess: true, optional: true },
+        
+        // 浏览器（需要 Playwright）
+        { name: '浏览器列表', args: ['browser_list'], expectSuccess: true, checkKeys: ['browsers'], optional: true },
+        
+        // macOS 特定
         { name: '系统运行时间', args: ['uptime'], expectSuccess: true, optional: true },
         { name: '电池信息', args: ['battery_info'], expectSuccess: true, optional: true },
         { name: 'Spotlight搜索', args: ['spotlight_search', '--query', 'calculator'], expectSuccess: true, optional: true },
