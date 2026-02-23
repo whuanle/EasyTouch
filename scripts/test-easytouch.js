@@ -39,6 +39,7 @@ const CONFIG = {
     mcpOnly: process.argv.includes('--mcp-only'),
     buildOnly: process.argv.includes('--build-only'),
     forceBuild: process.argv.includes('--build'),
+    aotBuild: process.argv.includes('--aot'),
     outputFile: getArgValue('--output'),
     timeout: 10000,
 };
@@ -85,18 +86,30 @@ function buildProject() {
         console.log(`\n🔨 Building ${info.projectName}...`);
         console.log(`   Runtime: ${info.runtime}`);
         console.log(`   Configuration: Release\n`);
+        console.log(`   Build mode: ${CONFIG.aotBuild ? 'AOT' : 'non-AOT'}\n`);
         
         const dotnetArgs = [
             'publish',
             path.join(info.projectPath, `${info.projectName}.csproj`),
             '-c', 'Release',
             '-r', info.runtime,
-            '--self-contained', 'true',
-            '-p:PublishAot=true',
-            '-p:PublishSingleFile=true',
-            '-p:PublishTrimmed=true',
-            '-p:TrimMode=full'
+            '--self-contained', 'true'
         ];
+
+        if (CONFIG.aotBuild) {
+            dotnetArgs.push(
+                '-p:PublishAot=true',
+                '-p:PublishSingleFile=true',
+                '-p:PublishTrimmed=true',
+                '-p:TrimMode=full'
+            );
+        } else {
+            dotnetArgs.push(
+                '-p:PublishAot=false',
+                '-p:PublishSingleFile=true',
+                '-p:PublishTrimmed=false'
+            );
+        }
         
         const buildProcess = spawn('dotnet', dotnetArgs, {
             stdio: CONFIG.verbose ? 'inherit' : 'pipe',
@@ -239,11 +252,12 @@ function runCommand(args, timeout = CONFIG.timeout) {
             stderr += data.toString();
         });
 
-        child.on('close', (code) => {
+        child.on('close', (code, signal) => {
             const duration = Date.now() - startTime;
             resolve({
                 success: code === 0,
                 exitCode: code,
+                signal: signal || null,
                 output: stdout.trim(),
                 error: stderr.trim(),
                 duration
@@ -254,6 +268,7 @@ function runCommand(args, timeout = CONFIG.timeout) {
             resolve({
                 success: false,
                 exitCode: -1,
+                signal: null,
                 output: '',
                 error: err.message,
                 duration: Date.now() - startTime
@@ -362,38 +377,8 @@ const TEST_CASES = {
         }},
     ],
     linux: [
-        // 鼠标操作（跨平台）
-        { name: '鼠标位置', args: ['mouse_position'], expectSuccess: true, checkKeys: ['x', 'y'], optional: true },
-        { name: '鼠标移动', args: ['mouse_move', '--x', '100', '--y', '100'], expectSuccess: true, optional: true },
-        { name: '鼠标点击', args: ['mouse_click'], expectSuccess: true, optional: true },
-        
-        // 键盘操作（跨平台）
-        { name: '按键测试', args: ['key_press', '--key', 'a'], expectSuccess: true, optional: true },
-        { name: '输入文本', args: ['type_text', '--text', 'Hello'], expectSuccess: true, optional: true },
-        
-        // 系统信息（跨平台）
-        { name: '系统信息', args: ['os_info'], expectSuccess: true, checkKeys: ['version', 'architecture'], optional: true },
-        { name: 'CPU信息', args: ['cpu_info'], expectSuccess: true, optional: true },
-        { name: '内存信息', args: ['memory_info'], expectSuccess: true, optional: true },
-        { name: '进程列表', args: ['process_list'], expectSuccess: true, checkKeys: ['processes'], optional: true },
-        { name: '磁盘列表', args: ['disk_list'], expectSuccess: true, checkKeys: ['disks'], optional: true },
-        
-        // 屏幕操作（跨平台）
-        { name: '显示器列表', args: ['screen_list'], expectSuccess: true, checkKeys: ['screens'], optional: true },
-        { name: '像素颜色', args: ['pixel_color', '--x', '100', '--y', '100'], expectSuccess: true, checkKeys: ['r', 'g', 'b'], optional: true },
-        { name: '截图功能', args: ['screenshot', '--output', path.join(os.tmpdir(), 'et_test_linux.png')], expectSuccess: true, optional: true, cleanup: (args) => {
-            try { fs.unlinkSync(args[args.indexOf('--output') + 1]); } catch {}
-        }},
-        
-        // 剪贴板（跨平台）
-        { name: '剪贴板写入', args: ['clipboard_set_text', '--text', 'LinuxTest123'], expectSuccess: true, optional: true },
-        { name: '剪贴板读取', args: ['clipboard_get_text'], expectSuccess: true, checkOutput: 'LinuxTest123', optional: true },
-        { name: '剪贴板清空', args: ['clipboard_clear'], expectSuccess: true, optional: true },
-        
-        // 浏览器（需要 Playwright）
+        // Linux 平台补充测试
         { name: '浏览器列表', args: ['browser_list'], expectSuccess: true, checkKeys: ['browsers'], optional: true },
-        
-        // Linux 特定
         { name: '系统运行时间', args: ['uptime'], expectSuccess: true, optional: true },
         { name: '电池信息', args: ['battery_info'], expectSuccess: true, optional: true },
     ],
@@ -508,7 +493,8 @@ async function runTests() {
     if (versionResult.exitCode === 0) {
         console.log(`Version: ${versionResult.output || 'N/A'}\n`);
     } else {
-        console.log(`⚠️  Could not get version (exit code: ${versionResult.exitCode})\n`);
+        const signalHint = versionResult.signal ? `, signal: ${versionResult.signal}` : '';
+        console.log(`⚠️  Could not get version (exit code: ${versionResult.exitCode}${signalHint})\n`);
     }
     
     if (CONFIG.mcpOnly) {
@@ -569,6 +555,11 @@ async function runTests() {
         const result = await runCommand(args);
         let status = '✓ PASS';
         let details = [];
+
+        if (result.signal) {
+            status = '✗ FAIL';
+            details.push(`Process crashed with signal: ${result.signal}`);
+        }
         
         // 捕获值供后续测试使用
         if (test.capture && result.success) {
@@ -587,7 +578,7 @@ async function runTests() {
         }
         
         // 自定义验证
-        if (test.verify) {
+        if (!result.signal && test.verify) {
             try {
                 const verifyResult = await test.verify(result, runCommand);
                 if (!verifyResult) {
@@ -598,7 +589,7 @@ async function runTests() {
                 status = '✗ FAIL';
                 details.push(`Verification error: ${e.message}`);
             }
-        } else {
+        } else if (!result.signal) {
             // 标准验证
             if (result.success !== test.expectSuccess) {
                 status = '✗ FAIL';
@@ -787,6 +778,7 @@ Usage: node test-easytouch.js [options]
 
 Options:
   --build         Force rebuild before testing
+  --aot           Build with AOT (default is non-AOT for better Linux compatibility)
   --build-only    Only build, don't run tests
   --cli-only      Run only CLI tests
   --mcp-only      Run only MCP mode tests
@@ -800,6 +792,9 @@ Examples:
 
   # 强制重新编译
   node test-easytouch.js --build
+
+  # 使用 AOT 编译后测试
+  node test-easytouch.js --build --aot
 
   # 只编译不测试
   node test-easytouch.js --build-only

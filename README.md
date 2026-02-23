@@ -35,27 +35,88 @@ npm i @whuanle/easytouch-mac
 
 
 
-### 手动下载
+或者从 [GitHub Releases](../../releases) 下载对应平台的可执行文件，并添加环境变量。
 
-从 [GitHub Releases](../../releases) 下载对应平台的可执行文件。
 
-### 源码编译
 
-需要 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+测试是否正常工作：
+
+
+
+### 浏览器操作支持
+
+EasyTouch 操作浏览器需要依赖 playwright，可以通过命令一键安装对应的环境：
 
 ```bash
-# Windows
-dotnet publish EasyTouch-Windows -c Release -r win-x64 --self-contained -p:PublishAot=true
-
-# Linux
-dotnet publish EasyTouch-Linux -c Release -r linux-x64 --self-contained -p:PublishAot=true
-
-# macOS
-dotnet publish EasyTouch-Mac -c Release -r osx-x64 --self-contained -p:PublishAot=true
-dotnet publish EasyTouch-Mac -c Release -r osx-arm64 --self-contained -p:PublishAot=true
+npm install @playwright/test
 ```
 
-## 快速开始
+
+
+你可以通过哦哦脚本快速安装 chromium 浏览器。
+
+```
+npx playwright install chromium
+```
+
+
+
+### 作为 MCP 工具使用
+
+在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异。
+
+通过 npm/bun 等方式安装的 EasyTouch，程序文件在
+
+
+
+在配置文件中添加：
+
+**Windows**
+
+```json
+{
+  "mcpServers": {
+    "easytouch": {
+      "command": "C:\\path\\to\\et.exe",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+**NPM 安装方式**
+
+```json
+{
+  "mcpServers": {
+    "easytouch": {
+      "command": "npx",
+      "args": ["-y", "easytouch-windows", "--mcp"]
+    }
+  }
+}
+```
+
+**Linux / macOS**
+
+```json
+{
+  "mcpServers": {
+    "easytouch": {
+      "command": "/path/to/et",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+
+
+### 作为 Skills 给 AI 使用
+
+
+
+
 
 ### CLI 模式
 
@@ -76,6 +137,8 @@ et window_foreground
 et --help
 ```
 
+
+
 ### MCP 模式
 
 启动 MCP 服务器：
@@ -83,6 +146,8 @@ et --help
 ```bash
 et --mcp
 ```
+
+
 
 ## CLI 命令参考
 
@@ -233,47 +298,13 @@ et browser_evaluate --browser-id <id> --script "document.title"
 et browser_close --browser-id <id>
 ```
 
+
+
 ## MCP 集成
 
 ### Claude Desktop
 
-在配置文件中添加：
 
-**Windows**
-```json
-{
-  "mcpServers": {
-    "easytouch": {
-      "command": "C:\\path\\to\\et.exe",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
-
-**NPM 安装方式**
-```json
-{
-  "mcpServers": {
-    "easytouch": {
-      "command": "npx",
-      "args": ["-y", "easytouch-windows", "--mcp"]
-    }
-  }
-}
-```
-
-**Linux / macOS**
-```json
-{
-  "mcpServers": {
-    "easytouch": {
-      "command": "/path/to/et",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
 
 ### 可用 MCP Tools
 
@@ -304,6 +335,8 @@ et browser_close --browser-id <id>
 | `browser_wait_for` | 等待元素状态 |
 | `browser_close` | 关闭浏览器 |
 | `browser_list` | 列出浏览器实例 |
+
+
 
 更多 MCP 使用文档见 [skills/SKILLS.md](skills/SKILLS.md)
 
