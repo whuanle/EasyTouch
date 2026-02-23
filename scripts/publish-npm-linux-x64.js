@@ -41,6 +41,11 @@ try {
         const skillMd = fs.readFileSync(skillMdPath, 'utf8');
         fs.writeFileSync(path.join(tempDir, 'SKILL.md'), skillMd);
     }
+    const installJsPath = path.join(projectDir, 'npx', 'linux', 'install.js');
+    if (fs.existsSync(installJsPath)) {
+        const installJs = fs.readFileSync(installJsPath, 'utf8');
+        fs.writeFileSync(path.join(tempDir, 'install.js'), installJs);
+    }
     console.log('📋 Copied package template');
 } catch (e) {
     console.error('❌ Error copying package template:', e.message);

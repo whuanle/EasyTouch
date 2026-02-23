@@ -7,30 +7,46 @@ const os = require('os');
 
 const platform = os.platform();
 const binaryName = platform === 'win32' ? 'et.exe' : 'et';
+const platformPackages = platform === 'win32'
+    ? ['@whuanle/easytouch-windows', 'easytouch-windows']
+    : platform === 'darwin'
+        ? ['@whuanle/easytouch-mac', '@whuanle/easytouch-macos', '@whuanle/easytouch-darwin', 'easytouch-macos']
+        : ['@whuanle/easytouch-linux', 'easytouch-linux'];
+
+function findExistingPath(paths) {
+    for (const p of paths) {
+        if (fs.existsSync(p)) {
+            return p;
+        }
+    }
+    return null;
+}
 
 // 查找二进制文件路径
 function findBinary() {
     // 1. 检查 bin 目录
-    const binPath = path.join(__dirname, '..', 'bin', binaryName);
-    if (fs.existsSync(binPath)) {
-        return binPath;
+    const localBinPath = path.join(__dirname, '..', 'bin', binaryName);
+    if (fs.existsSync(localBinPath)) {
+        return localBinPath;
     }
     
-    // 2. 检查 node_modules 中的平台包
-    const platformPkg = platform === 'win32' ? 'easytouch-windows' : 
-                       platform === 'darwin' ? 'easytouch-macos' : 'easytouch-linux';
-    const pkgPath = path.join(__dirname, '..', 'node_modules', platformPkg, binaryName);
-    if (fs.existsSync(pkgPath)) {
-        return pkgPath;
+    // 2. 检查 node_modules 中的平台包（兼容 scope/非 scope）
+    const localNodeModulesMatches = findExistingPath(
+        platformPackages.map((pkg) => path.join(__dirname, '..', 'node_modules', pkg, binaryName))
+    );
+    if (localNodeModulesMatches) {
+        return localNodeModulesMatches;
     }
     
     // 3. 全局安装检查
     try {
         const { execSync } = require('child_process');
         const globalPath = execSync('npm root -g', { encoding: 'utf8' }).trim();
-        const globalBinPath = path.join(globalPath, platformPkg, binaryName);
-        if (fs.existsSync(globalBinPath)) {
-            return globalBinPath;
+        const globalMatches = findExistingPath(
+            platformPackages.map((pkg) => path.join(globalPath, pkg, binaryName))
+        );
+        if (globalMatches) {
+            return globalMatches;
         }
     } catch (e) {}
     

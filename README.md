@@ -1,447 +1,243 @@
 # EasyTouch (et)
 
-一个跨平台的系统自动化操作工具，支持鼠标、键盘、屏幕、窗口、系统资源等多种操作。支持 CLI 和 MCP 两种使用方式。
+跨平台系统自动化操作工具，支持 Windows、Linux、macOS。提供 CLI 命令行和 MCP 服务器两种使用方式，支持鼠标键盘控制、屏幕截图、窗口管理、系统信息查询、浏览器操作等功能。
 
-支持平台：Windows、Linux、macOS
 
-## 安装方式
 
-### 方式一：NPM 安装（推荐）
+## 功能概览
 
-```bash
-# 安装对应平台的包
-npm install -g easytouch-windows  # Windows
-npm install -g easytouch-linux    # Linux  
-npm install -g easytouch-macos    # macOS
-```
+| 模块 | 功能 |
+|------|------|
+| 🖱️ 鼠标控制 | 移动、点击、滚动、获取位置 |
+| ⌨️ 键盘控制 | 按键、组合键、文本输入 |
+| 📷 屏幕操作 | 截图、获取像素颜色、多显示器支持 |
+| 🪟 窗口管理 | 列出、查找、激活窗口 |
+| 🖥️ 系统信息 | CPU、内存、磁盘、进程 |
+| 📋 剪贴板 | 文本读写、文件列表 |
+| 🌐 浏览器控制 | 启动浏览器、页面导航、元素交互、截图 |
 
-### 方式二：手动下载
 
-从 [GitHub Releases](https://github.com/yourusername/easytouch/releases) 下载对应平台的可执行文件。
 
-### 方式三：源码构建
+## 安装
+
+### NPM 安装（推荐）
 
 ```bash
 # Windows
-dotnet publish EasyTouch-Windows -c Release -r win-x64 --self-contained
+npm i @whuanle/easytouch-windows
 
-# Linux  
-dotnet publish EasyTouch-Linux -c Release -r linux-x64 --self-contained
+# Linux
+npm i @whuanle/easytouch-linux
 
 # macOS
-dotnet publish EasyTouch-Mac -c Release -r osx-x64 --self-contained
+npm i @whuanle/easytouch-mac
+```
+
+
+
+### 手动下载
+
+从 [GitHub Releases](../../releases) 下载对应平台的可执行文件。
+
+### 源码编译
+
+需要 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+
+```bash
+# Windows
+dotnet publish EasyTouch-Windows -c Release -r win-x64 --self-contained -p:PublishAot=true
+
+# Linux
+dotnet publish EasyTouch-Linux -c Release -r linux-x64 --self-contained -p:PublishAot=true
+
+# macOS
+dotnet publish EasyTouch-Mac -c Release -r osx-x64 --self-contained -p:PublishAot=true
+dotnet publish EasyTouch-Mac -c Release -r osx-arm64 --self-contained -p:PublishAot=true
 ```
 
 ## 快速开始
 
-## 功能模块
-
-### 1. 鼠标控制 (Mouse)
-
-| 命令 | 描述 |
-|------|------|
-| `mouse_move` | 移动鼠标到指定坐标 (相对/绝对) |
-| `mouse_click` | 鼠标点击 (左/右/中键，单击/双击) |
-| `mouse_down` | 鼠标按下 |
-| `mouse_up` | 鼠标释放 |
-| `mouse_scroll` | 鼠标滚轮滚动 |
-| `mouse_position` | 获取当前鼠标位置 |
-
-### 2. 键盘控制 (Keyboard)
-
-| 命令 | 描述 |
-|------|------|
-| `key_press` | 按键按下并释放 |
-| `key_down` | 按键按下 |
-| `key_up` | 按键释放 |
-| `type_text` | 输入文本字符串 (支持中文) |
-
-### 3. 屏幕操作 (Screen)
-
-| 命令 | 描述 |
-|------|------|
-| `screenshot` | 截图 |
-| `pixel_color` | 获取指定像素颜色 |
-| `screen_list` | 列出所有显示器 |
-
-### 4. 窗口管理 (Window)
-
-| 命令 | 描述 |
-|------|------|
-| `window_list` | 列出所有窗口 |
-| `window_find` | 查找窗口 |
-| `window_activate` | 激活窗口 |
-| `window_foreground` | 获取前台窗口 |
-
-### 5. 系统信息 (System)
-
-| 命令 | 描述 |
-|------|------|
-| `os_info` | 操作系统信息 |
-| `cpu_info` | CPU 信息 |
-| `memory_info` | 内存使用情况 |
-| `disk_list` | 磁盘列表 |
-| `process_list` | 进程列表 |
-| `lock_screen` | 锁定屏幕 |
-
-### 6. 剪贴板 (Clipboard)
-
-| 命令 | 描述 |
-|------|------|
-| `clipboard_get_text` | 获取剪贴板文本 |
-| `clipboard_set_text` | 设置剪贴板文本 |
-| `clipboard_clear` | 清空剪贴板 |
-| `clipboard_get_files` | 获取剪贴板文件列表 |
-
-### 7. 音频控制 (Audio)
-
-| 命令 | 描述 |
-|------|------|
-| `volume_get` | 获取当前音量 |
-| `volume_set` | 设置音量 |
-| `volume_mute` | 静音/取消静音 |
-| `audio_devices` | 列出音频设备 |
-
-## CLI 命令行模式
-
-### 基本用法
+### CLI 模式
 
 ```bash
-et <command> [options]
-```
-
-### 鼠标控制
-
-**移动鼠标**
-```bash
-# 绝对位置
+# 移动鼠标到坐标 (100, 200)
 et mouse_move --x 100 --y 200
 
-# 相对位置
-et mouse_move --x 50 --y -30 --relative
-
-# 平滑移动（模拟人类操作）
-et mouse_move --x 100 --y 200 --duration 500
-```
-
-**鼠标点击**
-```bash
-# 左键单击
-et mouse_click
-
-# 左键双击
-et mouse_click --double
-
-# 右键单击
-et mouse_click --button right
-
-# 中键单击
-et mouse_click --button middle
-```
-
-**鼠标滚轮**
-```bash
-# 向上滚动3格
-et mouse_scroll --amount 3
-
-# 向下滚动3格
-et mouse_scroll --amount -3
-
-# 水平滚动
-et mouse_scroll --amount 3 --horizontal
-```
-
-**获取鼠标位置**
-```bash
-et mouse_position
-```
-
-### 键盘控制
-
-**按键**
-```bash
-# 按下单个键
-et key_press --key "a"
-et key_press --key "enter"
-et key_press --key "esc"
-
-# 组合键
-et key_press --key "ctrl+c"
-et key_press --key "ctrl+v"
-et key_press --key "alt+tab"
-et key_press --key "win+d"
-```
-
-**输入文本**
-```bash
-# 普通文本
-et type_text --text "Hello World"
-
-# 中文文本
+# 输入文本（支持中文）
 et type_text --text "你好，世界！"
 
-# 模拟人类打字（带随机间隔）
-et type_text --text "Hello World" --human --interval 50
-```
-
-### 屏幕操作
-
-**截图**
-```bash
-# 全屏截图
+# 截图并保存
 et screenshot --output screenshot.png
 
-# 区域截图
-et screenshot --x 100 --y 100 --width 800 --height 600 --output region.png
-
-# 截图到剪贴板（不保存文件）
-et screenshot
-```
-
-**获取像素颜色**
-```bash
-et pixel_color --x 100 --y 200
-```
-
-**列出显示器**
-```bash
-et screen_list
-```
-
-### 窗口管理
-
-**列出窗口**
-```bash
-# 列出所有可见窗口
-et window_list
-
-# 列出所有窗口（包括隐藏）
-et window_list --visible-only false
-
-# 按标题过滤
-et window_list --filter "Chrome"
-```
-
-**查找窗口**
-```bash
-# 按标题查找
-et window_find --title "记事本"
-
-# 按类名查找
-et window_find --class "Notepad"
-
-# 按进程ID查找
-et window_find --pid 1234
-```
-
-**激活窗口**
-```bash
-# 通过标题激活
-et window_activate --title "记事本"
-
-# 通过窗口句柄激活
-et window_activate --handle 123456
-```
-
-**获取前台窗口**
-```bash
+# 获取当前活动窗口
 et window_foreground
+
+# 查看所有命令
+et --help
 ```
 
-### 系统信息
+### MCP 模式
 
-**操作系统信息**
-```bash
-et os_info
-```
+启动 MCP 服务器：
 
-**CPU 信息**
-```bash
-et cpu_info
-```
-
-**内存信息**
-```bash
-et memory_info
-```
-
-**磁盘信息**
-```bash
-et disk_list
-```
-
-**进程列表**
-```bash
-# 列出所有进程
-et process_list
-
-# 按名称过滤
-et process_list --filter "chrome"
-```
-
-**锁定屏幕**
-```bash
-et lock_screen
-```
-
-### 剪贴板操作
-
-**获取剪贴板文本**
-```bash
-et clipboard_get_text
-```
-
-**设置剪贴板文本**
-```bash
-et clipboard_set_text --text "Hello World"
-```
-
-**清空剪贴板**
-```bash
-et clipboard_clear
-```
-
-**获取剪贴板文件列表**
-```bash
-et clipboard_get_files
-```
-
-### 音频控制
-
-**获取音量**
-```bash
-et volume_get
-```
-
-**设置音量**
-```bash
-et volume_set --level 50
-```
-
-**静音/取消静音**
-```bash
-# 静音
-et volume_mute --state true
-
-# 取消静音
-et volume_mute --state false
-```
-
-**列出音频设备**
-```bash
-et audio_devices
-```
-
-## MCP 模式
-
-### stdio 模式
 ```bash
 et --mcp
 ```
 
-启动后通过 stdio 接收 MCP 协议的 JSON-RPC 请求。
+## CLI 命令参考
 
-### MCP Tools
+### 鼠标控制
 
-| Tool | 描述 | 参数 |
-|------|------|------|
-| `mouse_move` | 移动鼠标 | `x`, `y`, `relative`, `duration` |
-| `mouse_click` | 点击鼠标 | `button`, `double` |
-| `mouse_position` | 获取鼠标位置 | - |
-| `key_press` | 按下按键 | `key` |
-| `type_text` | 输入文本 | `text`, `interval`, `humanLike` |
-| `screenshot` | 截图 | `x`, `y`, `width`, `height`, `outputPath` |
-| `pixel_color` | 获取像素颜色 | `x`, `y` |
-| `window_list` | 列出窗口 | `visibleOnly`, `titleFilter` |
-| `window_find` | 查找窗口 | `title`, `className`, `processId` |
-| `window_activate` | 激活窗口 | `handle` |
-| `system_info` | 系统信息 | - |
-| `process_list` | 进程列表 | `nameFilter` |
-| `clipboard_get_text` | 获取剪贴板 | - |
-| `clipboard_set_text` | 设置剪贴板 | `text` |
-| `volume_get` | 获取音量 | - |
-| `volume_set` | 设置音量 | `level` |
-
-## 技术规格
-
-- **目标框架**: .NET 10
-- **编译方式**: AOT (Ahead-of-Time)
-- **输出文件**: `et` / `et.exe` (单文件，自包含)
-- **文件大小**: ~3-5 MB (取决于平台)
-- **支持平台**: 
-  - Windows 10/11 x64
-  - Linux x64 (测试于 Ubuntu, Debian, CentOS)
-  - macOS x64 / ARM64 (Intel/Apple Silicon)
-
-## 安装方法
-
-### 方式一：直接下载
-从 Releases 页面下载对应平台的二进制文件：
-- Windows: `et.exe`
-- Linux: `et`
-- macOS: `et`
-
-放置到系统 PATH 目录或任意位置即可使用。
-
-### 方式二：从源码编译
-
-**Windows**
 ```bash
-# 克隆仓库
-git clone <repository-url>
-cd EasyTouch/EasyTouch-Windows
+# 移动鼠标（绝对坐标）
+et mouse_move --x 100 --y 200
 
-# 构建（需要 .NET 10 SDK）
-dotnet publish EasyTouch-Windows.csproj -c Release -r win-x64 --self-contained true -p:PublishAot=true
+# 相对移动
+t mouse_move --x 50 --y -30 --relative
 
-# 输出文件位于 bin/Release/net10.0/win-x64/publish/et.exe
+# 平滑移动（500ms 动画）
+et mouse_move --x 100 --y 200 --duration 500
+
+# 左键单击（默认）
+et mouse_click
+
+# 右键双击
+t mouse_click --button right --double
+
+# 向上滚动3格
+t mouse_scroll --amount 3
+
+# 水平滚动
+t mouse_scroll --amount 3 --horizontal
+
+# 获取当前位置
+t mouse_position
 ```
 
-**Linux**
+### 键盘控制
+
 ```bash
-# 克隆仓库
-git clone <repository-url>
-cd EasyTouch/EasyTouch-Linux
+# 按下单个键
+t key_press --key "enter"
 
-# 构建（需要 .NET 10 SDK）
-dotnet publish EasyTouch-Linux.csproj -c Release -r linux-x64 --self-contained true -p:PublishAot=true
+# 组合键
+t key_press --key "ctrl+c"
+t key_press --key "alt+tab"
+t key_press --key "win+d"
 
-# 输出文件位于 bin/Release/net10.0/linux-x64/publish/et
-# 赋予执行权限
-chmod +x bin/Release/net10.0/linux-x64/publish/et
+# 输入文本
+t type_text --text "Hello World"
+
+# 模拟人工打字（带随机间隔）
+t type_text --text "Hello World" --human --interval 50
 ```
 
-**macOS**
+### 屏幕操作
+
 ```bash
-# 克隆仓库
-git clone <repository-url>
-cd EasyTouch/EasyTouch-Mac
+# 全屏截图
+t screenshot --output screenshot.png
 
-# 构建 Intel 版本（需要 .NET 10 SDK）
-dotnet publish EasyTouch-Mac.csproj -c Release -r osx-x64 --self-contained true -p:PublishAot=true
+# 区域截图
+t screenshot --x 100 --y 100 --width 800 --height 600 --output region.png
 
-# 构建 Apple Silicon 版本
-dotnet publish EasyTouch-Mac.csproj -c Release -r osx-arm64 --self-contained true -p:PublishAot=true
+# 获取像素颜色
+t pixel_color --x 100 --y 200
 
-# 输出文件位于 bin/Release/net10.0/osx-x64/publish/et 或 bin/Release/net10.0/osx-arm64/publish/et
-# 赋予执行权限
-chmod +x bin/Release/net10.0/osx-x64/publish/et
+# 列出显示器
+t screen_list
 ```
 
-**一键构建所有平台**
-```bash
-# Windows
-scripts\build-aot-win-x64.bat
+### 窗口管理
 
-# Linux / macOS
-./scripts/build-aot-unix-x64.sh
+```bash
+# 列出可见窗口
+t window_list
+
+# 按标题过滤
+t window_list --filter "Chrome"
+
+# 查找窗口
+t window_find --title "记事本"
+
+# 激活窗口
+t window_activate --title "记事本"
+
+# 获取前台窗口
+t window_foreground
 ```
 
-## 集成到 MCP 客户端
+### 系统信息
 
-### Claude Desktop 配置
+```bash
+# 操作系统信息
+et os_info
 
-在 `claude_desktop_config.json` 中添加：
+# CPU 信息
+et cpu_info
+
+# 内存信息
+et memory_info
+
+# 磁盘列表
+et disk_list
+
+# 进程列表
+et process_list --filter "chrome"
+
+# 锁定屏幕
+et lock_screen
+```
+
+### 剪贴板
+
+```bash
+# 获取文本
+et clipboard_get_text
+
+# 设置文本
+et clipboard_set_text --text "Hello World"
+
+# 清空
+et clipboard_clear
+
+# 获取文件列表
+et clipboard_get_files
+```
+
+### 浏览器控制
+
+```bash
+# 列出浏览器实例
+et browser_list
+
+# 启动 Chromium（无头模式）
+et browser_launch --browser chromium --headless
+
+# 打开页面
+et browser_navigate --browser-id <id> --url "https://example.com"
+
+# 点击元素
+et browser_click --browser-id <id> --selector "#submit"
+
+# 输入内容
+et browser_fill --browser-id <id> --selector "input[name='q']" --value "EasyTouch"
+
+# 页面截图
+et browser_screenshot --browser-id <id> --output page.png --full-page true
+
+# 执行脚本
+et browser_evaluate --browser-id <id> --script "document.title"
+
+# 关闭浏览器
+et browser_close --browser-id <id>
+```
+
+## MCP 集成
+
+### Claude Desktop
+
+在配置文件中添加：
 
 **Windows**
 ```json
@@ -450,6 +246,18 @@ scripts\build-aot-win-x64.bat
     "easytouch": {
       "command": "C:\\path\\to\\et.exe",
       "args": ["--mcp"]
+    }
+  }
+}
+```
+
+**NPM 安装方式**
+```json
+{
+  "mcpServers": {
+    "easytouch": {
+      "command": "npx",
+      "args": ["-y", "easytouch-windows", "--mcp"]
     }
   }
 }
@@ -467,32 +275,87 @@ scripts\build-aot-win-x64.bat
 }
 ```
 
-### 其他 MCP 客户端
+### 可用 MCP Tools
 
-配置命令为 `et`（或 Windows 上的 `et.exe`），参数为 `--mcp`，使用 stdio 传输。
+| Tool | 描述 |
+|------|------|
+| `mouse_move` | 移动鼠标 |
+| `mouse_click` | 点击鼠标 |
+| `mouse_position` | 获取鼠标位置 |
+| `key_press` | 按下按键 |
+| `type_text` | 输入文本 |
+| `screenshot` | 截图 |
+| `pixel_color` | 获取像素颜色 |
+| `window_list` | 列出窗口 |
+| `window_find` | 查找窗口 |
+| `window_activate` | 激活窗口 |
+| `system_info` | 系统信息 |
+| `process_list` | 进程列表 |
+| `clipboard_get_text` | 获取剪贴板文本 |
+| `clipboard_set_text` | 设置剪贴板文本 |
+| `browser_launch` | 启动浏览器 |
+| `browser_navigate` | 页面导航 |
+| `browser_click` | 点击页面元素 |
+| `browser_fill` | 填充输入框 |
+| `browser_find` | 查找页面元素 |
+| `browser_get_text` | 获取页面文本 |
+| `browser_screenshot` | 浏览器截图 |
+| `browser_evaluate` | 执行页面脚本 |
+| `browser_wait_for` | 等待元素状态 |
+| `browser_close` | 关闭浏览器 |
+| `browser_list` | 列出浏览器实例 |
 
-## 平台特定说明
+更多 MCP 使用文档见 [skills/SKILLS.md](skills/SKILLS.md)
+
+## 技术规格
+
+- **目标框架**: .NET 10
+- **编译方式**: AOT (Ahead-of-Time)
+- **输出**: 单文件可执行程序，无需运行时
+- **文件大小**: ~3-5 MB（依平台而异）
+- **支持平台**:
+  - Windows 10/11 x64
+  - Linux x64（X11，不支持 Wayland）
+  - macOS x64 / ARM64
+
+## 平台说明
 
 ### Windows
-- 所有功能完全支持
-- 部分功能（如操作系统关机、某些窗口操作）可能需要以管理员权限运行
+- 完全支持所有功能
+- 部分功能可能需要管理员权限
 
 ### Linux
-- 需要 X11 显示服务器（不支持 Wayland）
-- 部分功能在某些桌面环境下可能受限
-- 建议运行在有图形界面的环境中
+- 需要 X11 显示服务器
+- 不支持 Wayland
+- 建议在图形界面环境中使用
 
 ### macOS
-- 需要授予辅助功能权限（系统偏好设置 -> 安全性与隐私 -> 辅助功能）
+- 需要授予辅助功能权限（系统设置 → 隐私与安全性 → 辅助功能）
 - 截图功能需要屏幕录制权限
-- Apple Silicon 版本需要在 Rosetta 2 环境下运行 x64 版本
 
-## 注意事项
+## 项目结构
 
-1. **权限要求**: 部分功能可能需要管理员/root权限或辅助功能权限
-2. **AOT 编译**: 单文件已包含所有依赖，无需安装 .NET 运行时
-3. **安全性**: 该工具可以控制系统，请确保只在受信任的环境中使用
-4. **兼容性**: 各平台版本在对应系统上测试通过
+```
+EasyTouch/
+├── EasyTouch-Windows/    # Windows 版本
+├── EasyTouch-Linux/      # Linux 版本
+├── EasyTouch-Mac/        # macOS 版本
+├── EasyTouch.Tests/      # 共享测试
+├── EasyTouch.Tests.*     # 平台特定测试
+├── docs/                 # 文档
+├── skills/               # MCP 技能文档
+├── scripts/              # 构建脚本
+├── npx/                  # NPM 包装器
+└── README.md
+```
+
+## 文档
+
+- [MCP 测试指南](docs/MCP_TEST_GUIDE.md) - MCP 功能测试
+- [NPM 测试指南](docs/NPM_TEST_GUIDE.md) - NPM 包测试
+- [跨平台测试](docs/CROSS_PLATFORM_TESTING.md) - 跨平台测试策略
+- [发布指南](docs/PUBLISHING.md) - NPM 包发布流程
+- [浏览器自动化](skills/BROWSER_SETUP.md) - Playwright 浏览器自动化
 
 ## 许可证
 

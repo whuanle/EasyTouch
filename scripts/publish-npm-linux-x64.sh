@@ -46,6 +46,7 @@ fi
 
 cp "$PROJECT_DIR/npx/linux/package.json" "$TEMP_DIR/package.json"
 cp "$PROJECT_DIR/npx/linux/SKILL.md" "$TEMP_DIR/SKILL.md" 2>/dev/null || true
+cp "$PROJECT_DIR/npx/linux/install.js" "$TEMP_DIR/install.js" 2>/dev/null || true
 
 # Update version
 sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$TEMP_DIR/package.json"

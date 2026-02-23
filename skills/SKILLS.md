@@ -1,59 +1,52 @@
-# EasyTouch Skills
+# EasyTouch MCP 技能
 
-EasyTouch 作为 Model Context Protocol (MCP) 服务器，为 AI 助手提供跨平台的桌面自动化能力。
+EasyTouch 作为 MCP 服务器，为 AI 助手提供跨平台的桌面自动化能力。
 
-## 概述
+## 快速配置
 
-EasyTouch 实现了 MCP stdio 接口，允许 AI 助手通过标准化的 JSON-RPC 协议调用桌面自动化功能。
+### Claude Desktop
 
-### 核心能力
+配置文件位置：
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Linux: `~/.config/Claude/claude_desktop_config.json`
 
-1. **输入控制** - 鼠标和键盘的精确控制
-2. **屏幕捕获** - 截图和像素级分析
-3. **窗口管理** - 枚举和操作应用程序窗口
-4. **系统监控** - 获取系统资源和状态信息
-5. **浏览器自动化** - 通过 Playwright 实现 Web 自动化
-
-## MCP 配置
-
-### Claude Desktop 配置示例
-
-在 `claude_desktop_config.json` 中添加：
+添加配置：
 
 ```json
 {
   "mcpServers": {
     "easytouch": {
       "command": "et",
-      "args": ["mcp", "stdio"]
+      "args": ["--mcp"]
     }
   }
 }
 ```
 
-如果通过 npm 安装：
+使用 NPM 安装的快捷方式：
 
 ```json
 {
   "mcpServers": {
     "easytouch": {
       "command": "npx",
-      "args": ["-y", "easytouch", "mcp", "stdio"]
+      "args": ["-y", "easytouch-windows", "--mcp"]
     }
   }
 }
 ```
 
-### Cursor 配置示例
+### Cursor
 
-在 `.cursor/mcp.json` 中添加：
+配置文件：`.cursor/mcp.json`
 
 ```json
 {
   "mcpServers": {
     "easytouch": {
       "command": "et",
-      "args": ["mcp", "stdio"]
+      "args": ["--mcp"]
     }
   }
 }
@@ -63,146 +56,182 @@ EasyTouch 实现了 MCP stdio 接口，允许 AI 助手通过标准化的 JSON-R
 
 ### 鼠标控制
 
-- `mouse_move` - 移动鼠标到指定坐标
-- `mouse_click` - 点击鼠标按钮
-- `mouse_down` / `mouse_up` - 按住/释放鼠标
-- `mouse_scroll` - 滚动鼠标滚轮
-- `mouse_position` - 获取当前鼠标位置
+| Tool | 功能 | 关键参数 |
+|------|------|----------|
+| `mouse_move` | 移动鼠标 | `x`, `y`, `relative`, `duration` |
+| `mouse_click` | 点击鼠标 | `button` (left/right/middle), `double` |
+| `mouse_down` | 按住鼠标按钮 | `button` |
+| `mouse_up` | 释放鼠标按钮 | `button` |
+| `mouse_scroll` | 滚动滚轮 | `amount`, `horizontal` |
+| `mouse_position` | 获取当前位置 | - |
 
 ### 键盘控制
 
-- `key_press` - 按下单个按键
-- `key_down` / `key_up` - 按住/释放按键
-- `type_text` - 输入文本字符串
+| Tool | 功能 | 关键参数 |
+|------|------|----------|
+| `key_press` | 按下并释放按键 | `key` |
+| `key_down` | 按住按键 | `key` |
+| `key_up` | 释放按键 | `key` |
+| `type_text` | 输入文本 | `text`, `interval`, `humanLike` |
+
+**支持的按键名称**: `a-z`, `0-9`, `f1-f12`, `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, `ctrl`, `alt`, `shift`, `win`, `cmd`
+
+**组合键格式**: `ctrl+c`, `alt+tab`, `ctrl+shift+esc`, `win+d`
 
 ### 屏幕操作
 
-- `screenshot` - 截取屏幕或指定区域
-- `pixel_color` - 获取指定坐标的像素颜色
-- `screen_list` - 列出所有显示器
+| Tool | 功能 | 关键参数 |
+|------|------|----------|
+| `screenshot` | 截图 | `x`, `y`, `width`, `height`, `outputPath` |
+| `pixel_color` | 获取像素颜色 | `x`, `y` |
+| `screen_list` | 列出显示器 | - |
 
 ### 窗口管理
 
-- `window_list` - 列出所有窗口
-- `window_find` - 根据条件查找窗口
-- `window_activate` - 激活指定窗口
-- `window_foreground` - 获取当前活动窗口
+| Tool | 功能 | 关键参数 |
+|------|------|----------|
+| `window_list` | 列出窗口 | `visibleOnly`, `titleFilter` |
+| `window_find` | 查找窗口 | `title`, `className`, `processId` |
+| `window_activate` | 激活窗口 | `title` 或 `handle` |
+| `window_foreground` | 获取前台窗口 | - |
 
 ### 系统信息
 
-- `system_info` / `os_info` - 获取操作系统信息
-- `cpu_info` - 获取 CPU 信息
-- `memory_info` - 获取内存信息
-- `disk_list` - 列出磁盘驱动器
-- `process_list` - 列出运行中的进程
-- `lock_screen` - 锁定屏幕
+| Tool | 功能 |
+|------|------|
+| `os_info` | 操作系统信息 |
+| `cpu_info` | CPU 信息 |
+| `memory_info` | 内存使用情况 |
+| `disk_list` | 磁盘列表 |
+| `process_list` | 运行中的进程 |
+| `lock_screen` | 锁定屏幕 |
 
 ### 剪贴板
 
-- `clipboard_get_text` - 获取剪贴板文本
-- `clipboard_set_text` - 设置剪贴板文本
-- `clipboard_clear` - 清空剪贴板
-- `clipboard_get_files` - 获取剪贴板中的文件列表
+| Tool | 功能 | 关键参数 |
+|------|------|----------|
+| `clipboard_get_text` | 获取文本 | - |
+| `clipboard_set_text` | 设置文本 | `text` |
+| `clipboard_clear` | 清空 | - |
+| `clipboard_get_files` | 获取文件列表 | - |
 
 ### 音频控制
 
-- `volume_get` - 获取当前音量
-- `volume_set` - 设置音量
-- `volume_mute` - 静音/取消静音
-- `audio_devices` - 列出音频设备
+| Tool | 功能 | 关键参数 |
+|------|------|----------|
+| `volume_get` | 获取音量 | - |
+| `volume_set` | 设置音量 | `level` (0-100) |
+| `volume_mute` | 静音/取消静音 | `state` (true/false) |
+| `audio_devices` | 列出音频设备 | - |
 
-### 浏览器自动化（可选）
+## 使用场景
 
-需要安装 Playwright：
+### 界面自动化
 
-- `browser_launch` - 启动浏览器实例
-- `browser_navigate` - 导航到 URL
-- `browser_click` - 点击页面元素
-- `browser_fill` - 填充输入框
-- `browser_find` - 查找元素
-- `browser_get_text` - 获取页面文本
-- `browser_screenshot` - 页面截图
-- `browser_evaluate` - 执行 JavaScript
-- `browser_wait_for` - 等待元素出现
-- `browser_go_back` / `browser_go_forward` - 后退/前进
-- `browser_reload` - 刷新页面
-- `browser_scroll` - 滚动页面
-- `browser_select` - 选择下拉框选项
-- `browser_upload` - 上传文件
-- `browser_get_cookies` / `browser_set_cookie` / `browser_clear_cookies` - Cookie 管理
-- `browser_add_route` / `browser_remove_route` - 网络请求拦截
-- `browser_close` - 关闭浏览器
+用户："帮我打开计算器并计算 123 + 456"
 
-## 使用示例
+AI 执行：
+1. `window_find` 查找计算器窗口，如未找到则提示用户打开
+2. `window_activate` 激活计算器
+3. `mouse_click` 依次点击 1、2、3
+4. `mouse_click` 点击加号
+5. `mouse_click` 依次点击 4、5、6
+6. `mouse_click` 点击等号
+7. `screenshot` 截取结果
 
-### 自动化工作流
+### 数据录入
 
-AI 助手可以使用 EasyTouch 执行复杂的自动化任务：
+用户："帮我在这个表单中填写信息"
 
-```
-用户："帮我打开计算器，计算 123 + 456，然后截图保存"
-
-AI：
-1. 使用 window_find 查找计算器窗口
-2. 使用 window_activate 激活计算器
-3. 使用 click 点击数字按钮
-4. 使用 screenshot 截图
-5. 使用 mouse_move 和 mouse_click 保存截图
-```
-
-### 数据提取
-
-```
-用户："打开浏览器，访问 example.com，提取所有链接"
-
-AI：
-1. 使用 browser_launch 启动浏览器
-2. 使用 browser_navigate 访问网站
-3. 使用 browser_evaluate 执行 JS 提取链接
-4. 使用 browser_close 关闭浏览器
-```
+AI 执行：
+1. `screenshot` 查看当前界面
+2. `mouse_click` 点击第一个输入框
+3. `type_text` 输入内容
+4. `key_press` 按 Tab 切换到下一个字段
+5. 重复直到完成
 
 ### 系统监控
 
-```
 用户："检查系统资源使用情况"
 
-AI：
-1. 使用 cpu_info 获取 CPU 信息
-2. 使用 memory_info 获取内存信息
-3. 使用 process_list 获取进程列表
+AI 执行：
+1. `cpu_info` 获取 CPU 信息
+2. `memory_info` 获取内存信息
+3. `process_list` 获取进程列表
 4. 汇总报告给用户
-```
 
-## 安全考虑
+### 自动化测试
 
-- EasyTouch 需要适当的权限才能控制系统
-- 浏览器自动化功能需要用户显式安装 Playwright
-- 建议仅在受信任的环境中使用
-- 敏感操作（如锁屏）应谨慎使用
+用户："测试这个按钮的功能"
+
+AI 执行：
+1. `screenshot` 记录初始状态
+2. `mouse_click` 点击目标按钮
+3. `screenshot` 记录变化
+4. 比较前后差异，验证结果
 
 ## 故障排除
 
 ### MCP 连接失败
 
-1. 确认 `et` 命令在 PATH 中
-2. 检查 Claude Desktop / Cursor 的配置文件格式
-3. 查看 EasyTouch 的输出日志
+1. 验证 `et` 是否在 PATH 中：`which et` (Linux/macOS) 或 `where et` (Windows)
+2. 检查配置文件 JSON 格式是否有效
+3. 查看 Claude/Cursor 日志获取错误信息
 
 ### 工具调用失败
 
-1. 检查平台兼容性（某些功能在特定平台可能受限）
-2. 确认参数格式正确
-3. 查看错误消息获取详细信息
+1. 检查平台兼容性（Linux 需要 X11）
+2. 验证参数格式和类型
+3. 查看错误消息了解详情
 
-### 浏览器自动化不可用
+### 权限问题
 
-1. 确认已安装 Playwright：`npx playwright --version`
-2. 确认已安装浏览器二进制文件：`npx playwright install chromium`
-3. 查看详细安装指南：[BROWSER_SETUP.md](BROWSER_SETUP.md)
+- **Windows**: 以管理员身份运行
+- **macOS**: 系统设置 → 隐私与安全性 → 辅助功能 → 添加终端应用
+- **Linux**: 确保在 X11 会话中运行
 
-## 相关资源
+## 平台限制
 
-- [完整测试指南](../docs/MCP_TEST_GUIDE.md)
-- [浏览器自动化设置](BROWSER_SETUP.md)
-- [GitHub 仓库](https://github.com/yourusername/easytouch)
+| 功能 | Windows | Linux | macOS |
+|------|---------|-------|-------|
+| 鼠标控制 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
+| 键盘控制 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
+| 截图 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
+| 窗口管理 | ✅ 完整 | ⚠️ 部分 | ⚠️ 部分 |
+| 音频控制 | ✅ 完整 | ⚠️ 部分 | ⚠️ 部分 |
+
+**Linux 限制**:
+- 需要 X11，不支持 Wayland
+- 部分桌面环境功能受限
+
+**macOS 限制**:
+- 需要辅助功能权限
+- 截图需要屏幕录制权限
+
+## 浏览器自动化（可选）
+
+EasyTouch 支持通过 Playwright 进行浏览器自动化。
+
+安装 Playwright：
+
+```bash
+npm install -g playwright
+npx playwright install chromium
+```
+
+可用的浏览器工具：
+- `browser_launch` - 启动浏览器
+- `browser_navigate` - 导航到 URL
+- `browser_click` - 点击元素
+- `browser_fill` - 填充输入框
+- `browser_screenshot` - 页面截图
+- `browser_evaluate` - 执行 JavaScript
+- 更多...
+
+详细设置见 [BROWSER_SETUP.md](BROWSER_SETUP.md)
+
+## 相关文档
+
+- [MCP 测试指南](../docs/MCP_TEST_GUIDE.md) - 完整的 MCP 功能测试指南
+- [浏览器自动化设置](BROWSER_SETUP.md) - Playwright 安装和配置
+- [项目 README](../README.md) - 项目总览和 CLI 使用说明

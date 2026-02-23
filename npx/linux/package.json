@@ -8,6 +8,9 @@
   "bin": {
     "et": "et"
   },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
   "os": [
     "linux"
   ],
@@ -30,10 +33,11 @@
   },
   "files": [
     "et",
+    "install.js",
     "SKILL.md"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/maomiaent/easytouch"
+    "url": "https://github.com/whuanle/EasyTouch"
   }
 }

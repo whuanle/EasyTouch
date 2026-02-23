@@ -2,7 +2,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 const os = require('os');
 
 const platform = os.platform();
@@ -16,6 +15,17 @@ console.log();
 
 const binDir = path.join(__dirname, 'bin');
 const platformDir = path.join(__dirname, 'platforms');
+
+function findInstalledBinary(packageNames, binaryRelativePath) {
+    for (const packageName of packageNames) {
+        const candidate = path.join(__dirname, 'node_modules', packageName, binaryRelativePath);
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+
+    return null;
+}
 
 // 创建 bin 目录
 if (!fs.existsSync(binDir)) {
@@ -31,9 +41,11 @@ try {
         case 'win32':
             if (arch === 'x64') {
                 sourcePath = path.join(platformDir, 'windows', 'et.exe');
-                // 检查 optional dependency
-                const winPkg = path.join(__dirname, 'node_modules', 'easytouch-windows', 'et.exe');
-                if (fs.existsSync(winPkg)) {
+                const winPkg = findInstalledBinary(
+                    ['@whuanle/easytouch-windows', 'easytouch-windows'],
+                    'et.exe'
+                );
+                if (winPkg) {
                     sourcePath = winPkg;
                 }
             } else {
@@ -44,9 +56,11 @@ try {
         case 'linux':
             if (arch === 'x64') {
                 sourcePath = path.join(platformDir, 'linux', 'et');
-                // 检查 optional dependency
-                const linuxPkg = path.join(__dirname, 'node_modules', 'easytouch-linux', 'et');
-                if (fs.existsSync(linuxPkg)) {
+                const linuxPkg = findInstalledBinary(
+                    ['@whuanle/easytouch-linux', 'easytouch-linux'],
+                    'et'
+                );
+                if (linuxPkg) {
                     sourcePath = linuxPkg;
                 }
             } else {
@@ -57,10 +71,13 @@ try {
         case 'darwin':
             sourcePath = path.join(platformDir, 'macos', 'et');
             // macOS 使用 install.js 逻辑选择正确的架构
-            const macPkg = path.join(__dirname, 'node_modules', 'easytouch-macos', 'bin');
-            if (fs.existsSync(macPkg)) {
+            const macPkg = findInstalledBinary(
+                ['@whuanle/easytouch-mac', '@whuanle/easytouch-macos', '@whuanle/easytouch-darwin', 'easytouch-macos'],
+                'bin'
+            );
+            if (macPkg) {
                 // 让 easytouch-macos 的 postinstall 处理
-                console.log('✓ Using easytouch-macos package');
+                console.log(`✓ Using platform package: ${macPkg}`);
                 process.exit(0);
             }
             break;
