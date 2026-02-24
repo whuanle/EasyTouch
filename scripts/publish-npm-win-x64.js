@@ -46,9 +46,18 @@ try {
         const launcher = fs.readFileSync(launcherPath, 'utf8');
         fs.writeFileSync(path.join(tempDir, 'et-launcher.js'), launcher);
     }
-    const readmePath = path.join(projectDir, 'README.md');
-    if (fs.existsSync(readmePath)) {
-        fs.copyFileSync(readmePath, path.join(tempDir, 'README.md'));
+    const readmeCandidates = [
+        path.join(projectDir, 'README.md'),
+        path.join(projectDir, 'npx', 'windows', 'README.md')
+    ];
+    const existingReadme = readmeCandidates.find(p => fs.existsSync(p));
+    if (existingReadme) {
+        fs.copyFileSync(existingReadme, path.join(tempDir, 'README.md'));
+    } else {
+        fs.writeFileSync(
+            path.join(tempDir, 'README.md'),
+            '# easytouch-windows\n\nWindows system automation tool with MCP support.\n'
+        );
     }
     console.log('📋 Copied package template');
 } catch (e) {
