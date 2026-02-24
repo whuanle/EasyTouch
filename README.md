@@ -10,7 +10,15 @@
 
 
 
+大家平时使用各类 AI 编程工具，写页面是不是经常碰到 AI 写的页面怎么也不满意，写出来跟设计稿差异很大，这是因为 AI 只能通过读写代码来改进代码，它看不到界面，不像人类有感官。
+
+所以 EasyTouch 是给 AI 装上手和眼睛。
+
 ![image-20260224090852873](images/image-20260224090852873.png)
+
+![image-20260224093052367](images/image-20260224093052367.png)
+
+![image-20260224093505950](images/image-20260224093505950.png)
 
 
 
@@ -107,7 +115,7 @@ npx skills add https://github.com/whuanle/EasyTouch
 
 
 
-注：skills 里面不带脚本，需提前使用 `npm i @whuanle/easytouch-windows` 安装工具。
+注：skills 里面不带脚本，需提前使用 `npm i @whuanle/easytouch-windows` 安装工具。
 
 ![image-20260224090411080](images/image-20260224090411080.png)
 

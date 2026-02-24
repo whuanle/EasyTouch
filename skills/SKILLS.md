@@ -151,6 +151,7 @@ MCP 参数映射（常用）：
 1. 每次点击/输入前先 `browser_wait_for`
 2. 优先使用稳定选择器（`data-testid` / `name`）
 3. 失败时先 `browser_page_info` 再决定是否重建会话
+4. 截图必须传 `outputPath`，并以后端返回的 `imagePath` 作为唯一有效文件路径
 
 ## 使用场景
 

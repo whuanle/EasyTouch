@@ -148,6 +148,49 @@ MCP 调用范式：
 }
 ```
 
+### 4.1) 截图文件路径规范（必须遵守）
+
+AI 调用 `browser_screenshot` 时，必须显式传 `outputPath`，不要依赖默认路径。
+
+原因：
+- 不传 `outputPath` 时，截图会落到系统临时目录（`Path.GetTempPath()`）
+- AI 往往不会在后续步骤自动定位临时目录，导致“找不到截图文件”
+
+执行规则：
+1. 每次截图都传明确路径  
+2. 优先使用当前任务可访问目录（如仓库下 `artifacts/screenshots`）  
+3. 截图后始终读取返回值里的 `imagePath`，后续一律用这个实际路径  
+4. 不要自行猜测文件位置，不要硬编码与返回值不一致的路径
+
+CLI 示例：
+
+```bash
+et browser_screenshot --browser-id browser_1 --full-page true --output "./artifacts/screenshots/search-result.png"
+```
+
+MCP 示例：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "browser-3",
+  "method": "tools/call",
+  "params": {
+    "name": "browser_screenshot",
+    "arguments": {
+      "browserId": "browser_1",
+      "fullPage": true,
+      "outputPath": "E:\\workspace\\EasyTouch\\artifacts\\screenshots\\search-result.png",
+      "type": "png"
+    }
+  }
+}
+```
+
+收到响应后：
+- 记录 `data.imagePath`
+- 后续如果要读取/上传/展示截图，使用 `data.imagePath`，不要改写成其他路径
+
 ### 5) 选择器策略（提高成功率）
 
 优先级建议：
