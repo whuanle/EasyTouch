@@ -19,7 +19,7 @@ description: 使用 EasyTouch 进行跨平台桌面自动化。适用于鼠标�
 
 - 已安装 EasyTouch，可执行文件可通过 `et` 调用
 - 如使用浏览器能力，确保本机可启动 Playwright 浏览器
-- `skills` 仓库仅提供文档，不内置二进制；需先安装程序本体（例如 `@whuanle/easytouch-windows`）
+- `skills` 仓库仅提供文档，不内置二进制；需先安装程序本体（例如 `easytouch-windows`）
 
 ## 快速自检
 

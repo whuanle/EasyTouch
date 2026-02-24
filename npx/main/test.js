@@ -8,10 +8,10 @@ const os = require('os');
 const platform = os.platform();
 const binaryName = platform === 'win32' ? 'et.exe' : 'et';
 const platformPackages = platform === 'win32'
-    ? ['@whuanle/easytouch-windows', 'easytouch-windows']
+    ? ['easytouch-windows', 'easytouch-windows']
     : platform === 'darwin'
-        ? ['@whuanle/easytouch-mac', '@whuanle/easytouch-macos', '@whuanle/easytouch-darwin', 'easytouch-macos']
-        : ['@whuanle/easytouch-linux', 'easytouch-linux'];
+        ? ['easytouch-mac', 'easytouch-macos', 'easytouch-darwin', 'easytouch-macos']
+        : ['easytouch-linux', 'easytouch-linux'];
 
 function findExistingPath(paths) {
     for (const p of paths) {

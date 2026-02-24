@@ -26,10 +26,10 @@
     "url": "https://github.com/whuanle/EasyTouch"
   },
   "optionalDependencies": {
-    "@whuanle/easytouch-windows": "^1.0.0",
-    "@whuanle/easytouch-linux": "^1.0.0",
-    "@whuanle/easytouch-mac": "^1.0.0",
-    "@whuanle/easytouch-darwin": "^1.0.0",
+    "easytouch-windows": "^1.0.0",
+    "easytouch-linux": "^1.0.0",
+    "easytouch-mac": "^1.0.0",
+    "easytouch-darwin": "^1.0.0",
     "easytouch-windows": "^1.0.0",
     "easytouch-linux": "^1.0.0",
     "easytouch-macos": "^1.0.0"

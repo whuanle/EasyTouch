@@ -32,7 +32,7 @@ try {
     const pkg = JSON.parse(pkgJson);
     pkg.version = version;
     // 添加 scope
-    pkg.name = '@whuanle/easytouch-darwin';
+    pkg.name = 'easytouch-darwin';
     fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify(pkg, null, 2));
     
     // SKILL.md 是可选的
@@ -115,7 +115,7 @@ console.log('\n╔════════════════════�
 console.log('║  ✅ NPM Package Ready!                                      ║');
 console.log('╚════════════════════════════════════════════════════════════╝\n');
 console.log(`📁 Location: .\\npm-dist-darwin-x64\\`);
-console.log(`📦 Package: @whuanle/easytouch-darwin@${version}\n`);
+console.log(`📦 Package: easytouch-darwin@${version}\n`);
 console.log('🚀 To publish to NPM:');
 console.log('   cd npm-dist-darwin-x64');
 console.log('   npm publish --access public\n');

@@ -27,10 +27,10 @@ const IS_LINUX = PLATFORM === 'linux';
 const IS_MAC = PLATFORM === 'darwin';
 const ARCH = os.arch();
 const PLATFORM_PACKAGES = IS_WINDOWS
-    ? ['@whuanle/easytouch-windows', 'easytouch-windows']
+    ? ['easytouch-windows', 'easytouch-windows']
     : IS_MAC
-        ? ['@whuanle/easytouch-mac', '@whuanle/easytouch-macos', '@whuanle/easytouch-darwin', 'easytouch-macos']
-        : ['@whuanle/easytouch-linux', 'easytouch-linux'];
+        ? ['easytouch-mac', 'easytouch-macos', 'easytouch-darwin', 'easytouch-macos']
+        : ['easytouch-linux', 'easytouch-linux'];
 
 // 配置
 const CONFIG = {

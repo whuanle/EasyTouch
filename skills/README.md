@@ -32,13 +32,13 @@
 
 ```bash
 # Windows
-npm i @whuanle/easytouch-windows
+npm i easytouch-windows
 
 # Linux
-npm i @whuanle/easytouch-linux
+npm i easytouch-linux
 
 # macOS
-npm i @whuanle/easytouch-mac
+npm i easytouch-mac
 ```
 
 
@@ -107,7 +107,7 @@ npx skills add https://github.com/whuanle/EasyTouch
 
 如果只是给 AI 工具使用，建议使用 skills 即可，配置 MCP 可能会麻烦一些。
 
-在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异，通过 npm/bun 等方式安装的 EasyTouch，程序文件在 `$basedir/node_modules/@whuanle/easytouch-windows` 下面，。
+在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异，通过 npm/bun 等方式安装的 EasyTouch，程序文件在 `$basedir/node_modules/easytouch-windows` 下面，。
 
 
 

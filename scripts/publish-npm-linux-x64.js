@@ -32,7 +32,7 @@ try {
     const pkg = JSON.parse(pkgJson);
     pkg.version = version;
     // 添加 scope
-    pkg.name = '@whuanle/easytouch-linux';
+    pkg.name = 'easytouch-linux';
     fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify(pkg, null, 2));
     
     // SKILL.md 是可选的
@@ -120,7 +120,7 @@ console.log('\n╔════════════════════�
 console.log('║  ✅ NPM Package Ready!                                      ║');
 console.log('╚════════════════════════════════════════════════════════════╝\n');
 console.log(`📁 Location: .\\npm-dist-linux-x64\\`);
-console.log(`📦 Package: @whuanle/easytouch-linux@${version}\n`);
+console.log(`📦 Package: easytouch-linux@${version}\n`);
 console.log('🚀 To publish to NPM:');
 console.log('   cd npm-dist-linux-x64');
 console.log('   npm publish --access public\n');

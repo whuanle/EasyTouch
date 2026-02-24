@@ -10,6 +10,18 @@
 
 
 
+大家平时使用各类 AI 编程工具，写页面是不是经常碰到 AI 写的页面怎么也不满意，写出来跟设计稿差异很大，这是因为 AI 只能通过读写代码来改进代码，它看不到界面，不像人类有感官。
+
+所以 EasyTouch 是给 AI 装上手和眼睛。
+
+![image-20260224090852873](images/image-20260224090852873.png)
+
+![image-20260224093052367](images/image-20260224093052367.png)
+
+![image-20260224093505950](images/image-20260224093505950.png)
+
+
+
 ## 功能概览
 
 | 模块 | 功能 |
@@ -32,13 +44,13 @@
 
 ```bash
 # Windows
-npm i @whuanle/easytouch-windows
+npm i easytouch-windows
 
 # Linux
-npm i @whuanle/easytouch-linux
+npm i easytouch-linux
 
 # macOS
-npm i @whuanle/easytouch-mac
+npm i easytouch-mac
 ```
 
 
@@ -80,45 +92,40 @@ Commands:
 
 ### 浏览器操作支持
 
-Windows / Linux / macOS 三端都已统一使用 `Microsoft.Playwright`（.NET），不再依赖外部 Node.js Playwright 包。  
 支持浏览器：`chromium` / `firefox` / `webkit` / `edge`（`edge` 走 Chromium 通道 `msedge`）。
 
-首次使用浏览器功能时，程序会自动尝试安装对应浏览器内核（Chromium/Firefox/WebKit），无需手动执行 `npx playwright install`。
-
-如果你希望提前安装，可以直接执行一次浏览器命令触发安装：
+浏览器操作建议按会话流程执行：先启动，再获取 `browserId`，后续所有命令都使用该 `browserId`。
 
 ```bash
-et browser_launch --browser chromium --headless true
+et browser_launch --browser edge --headless false
+et browser_list
+# 使用 browserId 执行后续命令
+et browser_navigate --browser-id browser_1 --url "https://example.com"
 ```
 
 
 
-新增的 Web 自动化与测试能力（MCP）包括：
+### 作为 Skills 给 AI 使用
 
-- `browser_assert_text`：断言页面或元素文本（适合测试）
-- `browser_page_info`：读取页面标题、滚动位置、视口与文档尺寸
-- `browser_go_back` / `browser_go_forward` / `browser_reload`
-- `browser_scroll`：页面或元素滚动
-- `browser_select`：选择下拉项
-- `browser_upload`：文件上传
-- `browser_get_cookies` / `browser_set_cookie` / `browser_clear_cookies`
-- `browser_run_script`：执行本地 JS/TS Playwright 测试脚本文件
+只需要执行命令安装 skills 即可。
 
-`browser_run_script` 用于执行 AI 生成或手写的 Playwright 测试脚本（如 `.spec.ts` / `.spec.js`），并返回退出码。  
-常见参数：
-- `--script-path`：脚本文件路径（必填）
-- `--browser`：`chromium` / `firefox` / `webkit` / `edge`
-- `--headless`：是否无头（默认 `true`）
-- `--timeout`：测试超时（毫秒）
-- `--extra-args`：透传给 Playwright CLI 的额外参数，逗号分隔（例如 `--extra-args \"--reporter=list,--workers=1\"`）
+```bash
+npx skills add https://github.com/whuanle/EasyTouch
+```
+
+
+
+注：skills 里面不带脚本，需提前使用 `npm i easytouch-windows` 安装工具。
+
+![image-20260224090411080](images/image-20260224090411080.png)
 
 
 
 ### 作为 MCP 工具使用
 
-在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异。
+如果只是给 AI 工具使用，建议使用 skills 即可，配置 MCP 可能会麻烦一些。
 
-通过 npm/bun 等方式安装的 EasyTouch，程序文件在 `C:\Users\{用户名}\AppData\Roaming\npm` 下面。
+在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异，通过 npm/bun 等方式安装的 EasyTouch，程序文件在 `$basedir/node_modules/easytouch-windows` 下面，。
 
 
 
@@ -164,14 +171,6 @@ et browser_launch --browser chromium --headless true
 ```
 
 
-
-### 作为 Skills 给 AI 使用
-
-只需要执行命令安装 skills 即可。
-
-```bash
-npx skills add https://github.com/whuanle/EasyTouch/skills
-```
 
 
 
@@ -302,7 +301,7 @@ et clipboard_get_files
 
 
 
-使用 `et browser_launch --browser` 命令启动浏览器后（匿名模式），使用 `et browser_list` 获取浏览器实例列表，之后可以使用不同的命令控制浏览器，最后可以自行关闭或使用 `et browser_close` 关闭浏览器。
+使用 `et browser_launch --browser` 命令启动浏览器后（匿名模式），使用 `et browser_list` 获取浏览器实例列表，之后可以使用不同的命令控制浏览器，最后可以自行关闭或使用 `et browser_close` 关闭浏览器。
 
 
 
@@ -419,9 +418,26 @@ et browser_close --browser-id <id>
 - 部分功能可能需要管理员权限
 
 ### Linux
-- 需要 X11 显示服务器
-- 不支持 Wayland
-- 建议在图形界面环境中使用
+- 官方验证环境：Ubuntu Desktop（22.04 / 24.04）
+- 其他发行版和桌面环境为 best-effort，建议先用测试脚本验证
+- 建议在图形界面环境中使用（优先 X11 会话）
+- 有些功能可能需要 sudo 管理员权限
+
+Linux 依赖可手动安装（Ubuntu）：
+
+```bash
+# 基础依赖（推荐）
+sudo apt install xdotool xclip xsel imagemagick gnome-screenshot
+
+# Wayland 补充依赖（按需）
+sudo apt install ydotool wl-clipboard grim
+```
+
+安装后可执行脚本测试兼容性：
+
+```bash
+node scripts/test-easytouch.js --cli-only --verbose
+```
 
 ### macOS
 - 需要授予辅助功能权限（系统设置 → 隐私与安全性 → 辅助功能）

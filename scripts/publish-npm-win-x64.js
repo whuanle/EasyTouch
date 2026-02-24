@@ -32,7 +32,7 @@ try {
     const pkg = JSON.parse(pkgJson);
     pkg.version = version;
     // 添加 scope
-    pkg.name = '@whuanle/easytouch-windows';
+    pkg.name = 'easytouch-windows';
     fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify(pkg, null, 2));
     
     // SKILL.md 是可选的

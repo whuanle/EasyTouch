@@ -42,7 +42,7 @@ try {
             if (arch === 'x64') {
                 sourcePath = path.join(platformDir, 'windows', 'et.exe');
                 const winPkg = findInstalledBinary(
-                    ['@whuanle/easytouch-windows', 'easytouch-windows'],
+                    ['easytouch-windows', 'easytouch-windows'],
                     'et.exe'
                 );
                 if (winPkg) {
@@ -57,7 +57,7 @@ try {
             if (arch === 'x64') {
                 sourcePath = path.join(platformDir, 'linux', 'et');
                 const linuxPkg = findInstalledBinary(
-                    ['@whuanle/easytouch-linux', 'easytouch-linux'],
+                    ['easytouch-linux', 'easytouch-linux'],
                     'et'
                 );
                 if (linuxPkg) {
@@ -72,7 +72,7 @@ try {
             sourcePath = path.join(platformDir, 'macos', 'et');
             // macOS 使用 install.js 逻辑选择正确的架构
             const macPkg = findInstalledBinary(
-                ['@whuanle/easytouch-mac', '@whuanle/easytouch-macos', '@whuanle/easytouch-darwin', 'easytouch-macos'],
+                ['easytouch-mac', 'easytouch-macos', 'easytouch-darwin', 'easytouch-macos'],
                 'bin'
             );
             if (macPkg) {
