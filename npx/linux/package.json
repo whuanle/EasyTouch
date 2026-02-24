@@ -34,7 +34,12 @@
   "files": [
     "et",
     "install.js",
-    "SKILL.md"
+    "et-launcher.js",
+    ".playwright/",
+    "playwright.ps1",
+    "scripts/",
+    "SKILL.md",
+    "README.md"
   ],
   "repository": {
     "type": "git",

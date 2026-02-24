@@ -349,6 +349,7 @@ dotnet publish EasyTouch-Windows -c Release -r win-x64 --self-contained
    # 重新登录
    ```
 
+
 ### macOS 测试失败
 
 1. **权限问题**: 需要在系统偏好设置中授权

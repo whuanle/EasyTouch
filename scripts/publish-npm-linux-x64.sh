@@ -1,13 +1,18 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # EasyTouch NPM Publisher - Linux x64
 # Usage: ./publish-npm-linux-x64.sh <version>
 # Example: ./publish-npm-linux-x64.sh 1.0.0
 
+# If invoked via `sh script.sh`, re-exec with bash for compatibility.
+if [ -z "${BASH_VERSION:-}" ]; then
+    exec bash "$0" "$@"
+fi
+
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION="${1:-}"
 
 if [ -z "$VERSION" ]; then
@@ -52,15 +57,16 @@ cp "$PROJECT_DIR/README.md" "$TEMP_DIR/README.md" 2>/dev/null || true
 # Update version
 sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$TEMP_DIR/package.json"
 
-# 2. Build executable (Playwright is not compatible with NativeAOT)
-echo "🔨 Building executable for linux-x64 (AOT disabled for Playwright compatibility)..."
+# 2. Build executable with NativeAOT
+echo "🔨 Building executable for linux-x64 with NativeAOT..."
 dotnet publish "$PROJECT_DIR/EasyTouch-Linux/EasyTouch-Linux.csproj" \
     -c Release \
     -r linux-x64 \
     --self-contained true \
-    -p:PublishAot=false \
+    -p:PublishAot=true \
     -p:PublishSingleFile=true \
-    -p:PublishTrimmed=false \
+    -p:PublishTrimmed=true \
+    -p:TrimMode=full \
     -o "$TEMP_DIR"
 
 # 3. Copy Playwright bridge script
