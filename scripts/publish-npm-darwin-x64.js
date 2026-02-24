@@ -41,19 +41,23 @@ try {
         const skillMd = fs.readFileSync(skillMdPath, 'utf8');
         fs.writeFileSync(path.join(tempDir, 'SKILL.md'), skillMd);
     }
+    const readmePath = path.join(projectDir, 'README.md');
+    if (fs.existsSync(readmePath)) {
+        fs.copyFileSync(readmePath, path.join(tempDir, 'README.md'));
+    }
     console.log('📋 Copied package template');
 } catch (e) {
     console.error('❌ Error copying package template:', e.message);
     process.exit(1);
 }
 
-// 3. 构建 AOT 可执行文件
-console.log('🔨 Building AOT executable for darwin-x64...');
+// 3. 构建可执行文件（Playwright 与 NativeAOT 不兼容，禁用 AOT）
+console.log('🔨 Building executable for darwin-x64 (AOT disabled for Playwright compatibility)...');
 try {
     const csprojPath = path.join(projectDir, 'EasyTouch-macOS', 'EasyTouch-macOS.csproj');
     execSync(
         `dotnet publish "${csprojPath}" -c Release -r darwin-x64 --self-contained true ` +
-        `-p:PublishAot=true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:TrimMode=full ` +
+        `-p:PublishAot=false -p:PublishSingleFile=true -p:PublishTrimmed=false ` +
         `-o "${tempDir}"`,
         { stdio: 'inherit', cwd: projectDir }
     );

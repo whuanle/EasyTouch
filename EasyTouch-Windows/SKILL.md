@@ -52,6 +52,12 @@
 - 静音/取消静音
 - 列出音频设备
 
+### 8. 浏览器自动化（Playwright .NET）
+- 支持 `chromium/firefox/webkit/edge` 浏览器
+- 支持页面导航、点击、输入、等待、截图、执行 JS、Cookie 管理等操作
+- CLI 下浏览器会话默认通过后台 daemon 持久化，`browserId` 可跨命令复用
+- 提供 daemon 管理命令：`browser_daemon_status`、`browser_daemon_stop`
+
 ## 使用方式
 
 ### CLI 命令行模式
@@ -87,6 +93,13 @@ et clipboard_set_text --text "Hello"
 # 音频
 et volume_set --level 50
 et volume_mute --state true
+
+# 浏览器（会话持久化）
+et browser_launch --browser edge --headless false
+et browser_list
+et browser_navigate --browser-id browser_1 --url "https://example.com"
+et browser_daemon_status
+et browser_daemon_stop
 ```
 
 ### MCP 模式
@@ -136,6 +149,16 @@ et --mcp
 | `volume_set` | 设置音量 | `level` |
 | `volume_mute` | 静音/取消静音 | `state` |
 | `audio_devices` | 列出音频设备 | - |
+| `browser_launch` | 启动浏览器会话 | `browser`, `headless`, `executable`, `user-data-dir` |
+| `browser_list` | 列出浏览器会话 | - |
+| `browser_navigate` | 导航页面 | `browser-id`, `url`, `wait-until`, `timeout` |
+| `browser_click` | 点击元素 | `browser-id`, `selector`, `selector-type` |
+| `browser_fill` | 输入文本 | `browser-id`, `selector`, `value` |
+| `browser_wait_for` | 等待元素状态 | `browser-id`, `selector`, `state`, `timeout` |
+| `browser_screenshot` | 浏览器截图 | `browser-id`, `selector`, `output`, `full-page` |
+| `browser_close` | 关闭浏览器会话 | `browser-id`, `force` |
+| `browser_daemon_status` | 查询浏览器 daemon 状态 | - |
+| `browser_daemon_stop` | 停止浏览器 daemon | - |
 
 ## 技术规格
 
@@ -187,6 +210,6 @@ dotnet publish EasyTouch-Windows.csproj -c Release -r win-x64 --self-contained t
 ## 注意事项
 
 1. **管理员权限**: 部分功能（如操作系统关机、某些窗口操作）可能需要以管理员权限运行
-2. **AOT 编译**: 单文件已包含所有依赖，无需安装 .NET 运行时
+2. **发布模式**: 浏览器能力依赖 Playwright，发布时使用非 AOT 单文件模式（自包含）
 3. **安全性**: 该工具可以控制系统，请确保只在受信任的环境中使用
 4. **兼容性**: 仅在 Windows 10/11 x64 上测试通过

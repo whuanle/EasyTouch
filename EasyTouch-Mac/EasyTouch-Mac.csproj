@@ -11,13 +11,14 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     
     <!-- AOT 优化配置 - 最小体积 -->
-    <PublishAot>true</PublishAot>
+    <PublishAot>false</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
     <TrimMode>full</TrimMode>
-    <PublishTrimmed>true</PublishTrimmed>
+    <PublishTrimmed>false</PublishTrimmed>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     
     <!-- 完全禁用调试信息 -->
     <DebugType>none</DebugType>
@@ -54,6 +55,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Playwright" Version="1.50.0" />
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

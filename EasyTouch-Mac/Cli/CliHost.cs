@@ -229,7 +229,87 @@ public static class CliHost
                 Selector = GetStringOption(options, "selector", "")!,
                 SelectorType = GetStringOption(options, "selector-type", "css"),
                 State = GetStringOption(options, "state", "visible"),
-                Timeout = GetIntOption(options, "timeout", 30000)
+                Timeout = GetNullableIntOption(options, "timeout")
+            }),
+            "browser_assert_text" => BrowserModule.AssertText(new BrowserAssertTextRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Selector = GetStringOption(options, "selector", null),
+                SelectorType = GetStringOption(options, "selector-type", "css"),
+                ExpectedText = GetStringOption(options, "expected-text", "")!,
+                ExactMatch = GetBoolOption(options, "exact-match", false),
+                IgnoreCase = GetBoolOption(options, "ignore-case", false)
+            }),
+            "browser_page_info" => BrowserModule.GetPageInfo(new BrowserGetPageInfoRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!
+            }),
+            "browser_go_back" => BrowserModule.GoBack(new BrowserGoBackRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Timeout = GetNullableIntOption(options, "timeout")
+            }),
+            "browser_go_forward" => BrowserModule.GoForward(new BrowserGoForwardRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Timeout = GetNullableIntOption(options, "timeout")
+            }),
+            "browser_reload" => BrowserModule.Reload(new BrowserReloadRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Timeout = GetNullableIntOption(options, "timeout")
+            }),
+            "browser_scroll" => BrowserModule.Scroll(new BrowserScrollRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                X = GetNullableIntOption(options, "x"),
+                Y = GetNullableIntOption(options, "y"),
+                Selector = GetStringOption(options, "selector", null),
+                SelectorType = GetStringOption(options, "selector-type", "css"),
+                Behavior = GetStringOption(options, "behavior", "auto")
+            }),
+            "browser_select" => BrowserModule.Select(new BrowserSelectRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Selector = GetStringOption(options, "selector", "")!,
+                SelectorType = GetStringOption(options, "selector-type", "css"),
+                Values = GetCsvOption(options, "values")
+            }),
+            "browser_upload" => BrowserModule.Upload(new BrowserUploadRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Selector = GetStringOption(options, "selector", "")!,
+                SelectorType = GetStringOption(options, "selector-type", "css"),
+                Files = GetCsvOption(options, "files")
+            }),
+            "browser_get_cookies" => BrowserModule.GetCookies(new BrowserGetCookiesRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Url = GetStringOption(options, "url", null)
+            }),
+            "browser_set_cookie" => BrowserModule.SetCookie(new BrowserSetCookieRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!,
+                Name = GetStringOption(options, "name", "")!,
+                Value = GetStringOption(options, "value", "")!,
+                Domain = GetStringOption(options, "domain", null),
+                Path = GetStringOption(options, "path", null),
+                Expires = GetNullableLongOption(options, "expires"),
+                HttpOnly = GetBoolOption(options, "http-only", false),
+                Secure = GetBoolOption(options, "secure", false),
+                SameSite = GetStringOption(options, "same-site", null)
+            }),
+            "browser_clear_cookies" => BrowserModule.ClearCookies(new BrowserClearCookiesRequest
+            {
+                BrowserId = GetStringOption(options, "browser-id", "")!
+            }),
+            "browser_run_script" => BrowserModule.RunScript(new BrowserRunScriptRequest
+            {
+                ScriptPath = GetStringOption(options, "script-path", "")!,
+                BrowserType = GetStringOption(options, "browser", "chromium")!,
+                Headless = GetBoolOption(options, "headless", true),
+                Timeout = GetNullableIntOption(options, "timeout"),
+                ExtraArgs = GetCsvOption(options, "extra-args")
             }),
             "browser_close" => BrowserModule.Close(new BrowserCloseRequest
             {
@@ -320,6 +400,24 @@ public static class CliHost
         return options.TryGetValue(key, out var value) && long.TryParse(value, out var result) ? result : defaultValue;
     }
 
+    private static long? GetNullableLongOption(Dictionary<string, string> options, string key)
+    {
+        return options.TryGetValue(key, out var value) && long.TryParse(value, out var result) ? result : null;
+    }
+
+    private static string[] GetCsvOption(Dictionary<string, string> options, string key)
+    {
+        if (!options.TryGetValue(key, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        return value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .ToArray();
+    }
+
     private static bool GetBoolOption(Dictionary<string, string> options, string key, bool defaultValue)
     {
         if (options.TryGetValue(key, out var value))
@@ -363,6 +461,7 @@ public static class CliHost
         Console.WriteLine("  os_info, cpu_info, memory_info, disk_list");
         Console.WriteLine("  process_list [--filter <text>]");
         Console.WriteLine("  clipboard_get_text, clipboard_set_text --text <text>");
+        Console.WriteLine("  browser_* (launch/navigate/click/fill/find/wait/assert/screenshot/cookies/run_script)");
         Console.WriteLine("  volume_get, volume_set --level <0-100>");
         Console.WriteLine();
         Console.WriteLine("  help       Show this help");

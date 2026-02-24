@@ -1268,24 +1268,21 @@ if __name__ == "__main__":
 
 ### 问题 5: 浏览器操作失败
 **检查**:
-- 是否已安装 Playwright: `npx playwright --version`
-- 是否已安装浏览器: `npx playwright install chromium`
-- Node.js 版本是否 >= 16: `node --version`
+- 是否是首次运行（首次会自动下载浏览器内核，网络较慢时可能超时）
+- 是否有可写临时目录权限
+- Edge 模式下本机是否已安装 Microsoft Edge（`--browser edge`）
 
 ---
 
-## 浏览器自动化测试（需安装 Playwright）
+## 浏览器自动化测试（基于 Microsoft.Playwright）
 
 **前置条件**：
 ```bash
-# 1. 安装 Playwright
-npm install -g playwright
+# 1. 确认可执行文件可用
+et --help
 
-# 2. 安装浏览器
-npx playwright install chromium
-
-# 3. 验证安装
-npx playwright --version
+# 2. 首次运行浏览器命令（会自动安装内核）
+et browser_launch --browser chromium --headless true
 ```
 
 ---
@@ -1314,10 +1311,10 @@ npx playwright --version
 ```
 
 **验收标准**:
-- ✅ Playwright 已安装时返回成功
+- ✅ 首次运行后自动完成浏览器内核准备
 - ✅ 返回 browserId
 - ✅ 返回浏览器版本
-- ❌ Playwright 未安装时返回友好提示
+- ❌ 浏览器内核下载失败时返回友好提示
 
 ---
 
@@ -1532,6 +1529,51 @@ et browser_close --browser-id browser_1
 
 ---
 
+### 浏览器测试 11: Edge 启动 (browser_launch + edge)
+
+**测试目的**: 验证 Edge 通道启动能力
+
+**CLI 测试**:
+```bash
+et browser_launch --browser edge --headless false
+```
+
+**MCP 测试**:
+```json
+{"jsonrpc":"2.0","id":"browser-edge-1","method":"tools/call","params":{"name":"browser_launch","arguments":{"browserType":"edge","headless":false}}}
+```
+
+**验收标准**:
+- ✅ 返回 `BrowserType: edge`
+- ✅ 可正常打开并操作页面
+
+---
+
+### 浏览器测试 12: 执行 JS/TS 测试脚本 (browser_run_script)
+
+**测试目的**: 验证本地 Playwright 脚本执行能力（支持 AI 生成测试脚本）
+
+**CLI 测试**:
+```bash
+# 执行 TS 测试脚本
+et browser_run_script --script-path "./tests/example.spec.ts" --browser edge --headless true
+
+# 透传额外参数（逗号分隔）
+et browser_run_script --script-path "./tests/example.spec.ts" --browser chromium --extra-args "--reporter=list,--workers=1"
+```
+
+**MCP 测试**:
+```json
+{"jsonrpc":"2.0","id":"run-script-1","method":"tools/call","params":{"name":"browser_run_script","arguments":{"scriptPath":"./tests/example.spec.ts","browserType":"edge","headless":true,"extraArgs":["--reporter=list","--workers=1"]}}}
+```
+
+**验收标准**:
+- ✅ 返回 `exitCode`
+- ✅ `exitCode=0` 时 `success=true`
+- ✅ 失败时包含可复现的命令行信息（`command` 字段）
+
+---
+
 ## 浏览器自动化完整流程测试
 
 **测试场景**: 自动化登录流程
@@ -1615,9 +1657,9 @@ BROWSER_ID=$(./et browser_launch --browser chromium --headless | jq -r '.Data.Br
 - [ ] 错误处理正确
 - [ ] 无效方法返回错误
 
-### 浏览器自动化测试清单（需安装 Playwright）
+### 浏览器自动化测试清单（Microsoft.Playwright）
 
-**前置条件**: ☐ 已安装 Playwright (`npm install -g playwright`)
+**前置条件**: ☐ `et browser_launch --browser chromium --headless true` 首次执行成功
 
 - [ ] browser_launch 能启动浏览器
 - [ ] browser_navigate 能导航到页面
@@ -1628,10 +1670,18 @@ BROWSER_ID=$(./et browser_launch --browser chromium --headless | jq -r '.Data.Br
 - [ ] browser_wait_for 能等待元素
 - [ ] browser_get_text 能获取页面文本
 - [ ] browser_find 能查找元素
+- [ ] browser_assert_text 能完成文本断言
+- [ ] browser_page_info 能获取页面信息
+- [ ] browser_go_back/go_forward/reload 能控制导航
+- [ ] browser_scroll 能滚动页面/元素
+- [ ] browser_select 能执行下拉选择
+- [ ] browser_upload 能上传文件
+- [ ] browser_get_cookies/set_cookie/clear_cookies 能管理 Cookie
+- [ ] browser_run_script 能执行 JS/TS 脚本
 - [ ] browser_close 能关闭浏览器
-- [ ] Playwright 未安装时显示友好提示
+- [ ] 浏览器内核缺失/下载失败时显示友好提示
 
 **测试人员**: _______________  
 **测试日期**: _______________  
 **测试平台**: ☐ Windows ☐ Linux ☐ macOS
-**浏览器**: ☐ Chromium ☐ Firefox ☐ WebKit
+**浏览器**: ☐ Chromium ☐ Firefox ☐ WebKit ☐ Edge

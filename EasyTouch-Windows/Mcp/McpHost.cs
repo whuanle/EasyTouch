@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Encodings.Web;
 using EasyTouch.Core.Models;
 using EasyTouch.Modules;
 
@@ -6,6 +7,11 @@ namespace EasyTouch.Mcp;
 
 public static class McpHost
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public static void RunStdio()
     {
         Console.Error.WriteLine("EasyTouch MCP Server started (stdio mode)");
@@ -17,11 +23,11 @@ public static class McpHost
                 var line = Console.ReadLine();
                 if (line == null) break;
                 
-                var request = JsonSerializer.Deserialize<McpRequest>(line);
+                var request = JsonSerializer.Deserialize<McpRequest>(line, JsonOptions);
                 if (request == null) continue;
 
                 var response = HandleRequest(request);
-                var responseJson = JsonSerializer.Serialize(response);
+                var responseJson = JsonSerializer.Serialize(response, JsonOptions);
                 Console.WriteLine(responseJson);
             }
             catch (Exception ex)
@@ -31,7 +37,7 @@ public static class McpHost
                     Id = null,
                     Error = new McpError { Code = -1, Message = ex.Message }
                 };
-                Console.WriteLine(JsonSerializer.Serialize(errorResponse));
+                Console.WriteLine(JsonSerializer.Serialize(errorResponse, JsonOptions));
             }
         }
     }

@@ -19,8 +19,9 @@ build_windows() {
         dotnet publish -c Release -r win-x64 --self-contained true -p:PublishAot=true
     fi
     mkdir -p ../skills/windows
-    cp bin/Release/net10.0/win-x64/publish/et.exe ../skills/windows/ 2>/dev/null || true
-    cp EasyTouch-Windows/SKILL.md ../skills/windows/ 2>/dev/null || true
+    cp SKILL.md ../skills/windows/SKILL.md 2>/dev/null || true
+    cp ../README.md ../skills/README.md 2>/dev/null || true
+    rm -f ../skills/windows/et.exe ../skills/windows/et-x64 ../skills/windows/et 2>/dev/null || true
     cd ..
 }
 
@@ -29,9 +30,10 @@ build_linux() {
     cd EasyTouch-Linux
     dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishAot=true
     mkdir -p ../skills/linux
-    cp bin/Release/net10.0/linux-x64/publish/et ../skills/linux/et-x64
+    cp SKILL.md ../skills/linux/SKILL.md 2>/dev/null || true
+    cp ../README.md ../skills/README.md 2>/dev/null || true
+    rm -f ../skills/linux/et ../skills/linux/et-x64 ../skills/linux/et.exe 2>/dev/null || true
     cd ..
-    cp EasyTouch-Linux/SKILL.md ../skills/linux/ 2>/dev/null || true
 }
 
 build_mac() {
@@ -40,20 +42,17 @@ build_mac() {
     
     # Build Intel (x64) version
     echo "Building macOS Intel (x64)..."
-    dotnet publish -c Release -r osx-x64 --self-contained true -p:PublishAot=true -o ../../skills/mac/x64_temp
+    dotnet publish -c Release -r osx-x64 --self-contained true -p:PublishAot=true
     
     # Build Apple Silicon (arm64) version
     echo "Building macOS Apple Silicon (arm64)..."
-    dotnet publish -c Release -r osx-arm64 --self-contained true -p:PublishAot=true -o ../../skills/mac/arm64_temp
-    
-    # Organize output
-    mkdir -p ../../skills/mac
-    mv ../../skills/mac/x64_temp/et ../../skills/mac/et-x64
-    mv ../../skills/mac/arm64_temp/et ../../skills/mac/et-arm64
-    rm -rf ../../skills/mac/x64_temp ../../skills/mac/arm64_temp
-    
+    dotnet publish -c Release -r osx-arm64 --self-contained true -p:PublishAot=true
+
+    mkdir -p ../skills/mac
+    cp SKILL.md ../skills/mac/SKILL.md 2>/dev/null || true
+    cp ../README.md ../skills/README.md 2>/dev/null || true
+    rm -f ../skills/mac/et ../skills/mac/et-x64 ../skills/mac/et-arm64 ../skills/mac/et.exe 2>/dev/null || true
     cd ..
-    cp EasyTouch-Mac/SKILL.md ../skills/mac/ 2>/dev/null || true
 }
 
 case $BUILD_TYPE in
@@ -81,9 +80,9 @@ echo ""
 echo "=========================================="
 echo "Build completed!"
 echo ""
-echo "Output structure:"
-echo "  skills/windows/et.exe    (Windows x64)"
-echo "  skills/linux/et-x64      (Linux x64)"
-echo "  skills/mac/et-x64        (macOS Intel)"
-echo "  skills/mac/et-arm64      (macOS Apple Silicon)"
+echo "Skills docs synced:"
+echo "  skills/README.md         (from root README.md)"
+echo "  skills/windows/SKILL.md  (Windows docs)"
+echo "  skills/linux/SKILL.md    (Linux docs)"
+echo "  skills/mac/SKILL.md      (macOS docs)"
 echo "=========================================="

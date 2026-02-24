@@ -9,13 +9,14 @@
     <Nullable>enable</Nullable>
     
     <!-- AOT 优化配置 - 最小体积 -->
-    <PublishAot>true</PublishAot>
+    <PublishAot>false</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
     <TrimMode>full</TrimMode>
-    <PublishTrimmed>true</PublishTrimmed>
+    <PublishTrimmed>false</PublishTrimmed>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     
     <!-- 完全禁用调试信息 -->
     <DebugType>none</DebugType>
@@ -77,12 +78,6 @@
     </ItemGroup>
     <Delete Files="@(PdbFilesToDelete)" />
     <Message Text="Deleted PDB files: @(PdbFilesToDelete)" Importance="high" />
-  </Target>
-
-  <!-- 移除 Playwright 浏览器二进制文件（我们使用 npx playwright CLI 方式） -->
-  <Target Name="DeletePlaywrightFiles" AfterTargets="Publish">
-    <RemoveDir Directories="$(PublishDir).playwright" />
-    <Message Text="Deleted .playwright directory" Importance="high" />
   </Target>
 
 </Project>

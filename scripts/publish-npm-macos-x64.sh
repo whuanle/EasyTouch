@@ -46,32 +46,31 @@ fi
 
 cp "$PROJECT_DIR/npx/mac/package.json" "$TEMP_DIR/package.json"
 cp "$PROJECT_DIR/npx/mac/install.js" "$TEMP_DIR/install.js" 2>/dev/null || true
+cp "$PROJECT_DIR/README.md" "$TEMP_DIR/README.md" 2>/dev/null || true
 
 # Update version
 sed -i '' "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$TEMP_DIR/package.json" 2>/dev/null || \
 sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$TEMP_DIR/package.json"
 
-# 2. Build AOT executables for both architectures
-echo "🔨 Building AOT executable for macOS x64..."
+# 2. Build executables for both architectures (Playwright is not compatible with NativeAOT)
+echo "🔨 Building executable for macOS x64 (AOT disabled for Playwright compatibility)..."
 dotnet publish "$PROJECT_DIR/EasyTouch-Mac/EasyTouch-Mac.csproj" \
     -c Release \
     -r osx-x64 \
     --self-contained true \
-    -p:PublishAot=true \
+    -p:PublishAot=false \
     -p:PublishSingleFile=true \
-    -p:PublishTrimmed=true \
-    -p:TrimMode=full \
+    -p:PublishTrimmed=false \
     -o "$TEMP_DIR/bin-x64"
 
-echo "🔨 Building AOT executable for macOS arm64..."
+echo "🔨 Building executable for macOS arm64 (AOT disabled for Playwright compatibility)..."
 dotnet publish "$PROJECT_DIR/EasyTouch-Mac/EasyTouch-Mac.csproj" \
     -c Release \
     -r osx-arm64 \
     --self-contained true \
-    -p:PublishAot=true \
+    -p:PublishAot=false \
     -p:PublishSingleFile=true \
-    -p:PublishTrimmed=true \
-    -p:TrimMode=full \
+    -p:PublishTrimmed=false \
     -o "$TEMP_DIR/bin-arm64"
 
 # 3. Setup bin directory with architecture-specific binaries

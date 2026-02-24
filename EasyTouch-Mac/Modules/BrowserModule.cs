@@ -1,176 +1,98 @@
-using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using EasyTouch.Core.Models;
+using Microsoft.Playwright;
 
 namespace EasyTouch.Modules;
 
 /// <summary>
-/// 浏览器自动化模块 - 通过外部 Playwright 命令
-/// 
-/// 使用说明：
-/// 1. 安装 Node.js
-/// 2. 安装 Playwright: npm install -g playwright
-/// 3. 安装浏览器: npx playwright install chromium
-/// 4. 开始使用浏览器功能
+/// Browser automation via Microsoft.Playwright .NET SDK.
 /// </summary>
 public static class BrowserModule
 {
-    private static readonly Dictionary<string, BrowserInstance> Browsers = new();
-    private static int _browserCounter = 0;
-    private static bool _playwrightChecked = false;
-    private static bool _playwrightAvailable = false;
-
-    /// <summary>
-    /// 检查 Playwright 是否可用
-    /// </summary>
-    public static bool IsAvailable()
+    private static readonly ConcurrentDictionary<string, BrowserSession> Sessions = new();
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        if (!_playwrightChecked)
-        {
-            _playwrightAvailable = CheckPlaywrightAvailable();
-            _playwrightChecked = true;
-        }
-        return _playwrightAvailable;
-    }
+        PropertyNameCaseInsensitive = true
+    };
+    private static readonly Lazy<Task<IPlaywright>> PlaywrightLazy = new(() => Microsoft.Playwright.Playwright.CreateAsync());
+    private static int _browserCounter = 0;
 
-    /// <summary>
-    /// 检查 Playwright 命令是否可用
-    /// </summary>
-    private static bool CheckPlaywrightAvailable()
+    public static bool IsAvailable()
     {
         try
         {
-            // 首先检查 node 是否可用
-            var nodeCheck = RunCommand("node", "--version", 5000);
-            if (nodeCheck.StartsWith("ERROR:"))
-            {
-                _lastError = "Node.js is not installed or not in PATH";
-                return false;
-            }
-
-            // 检查 npx 是否可用
-            var npxCheck = RunCommand("npx", "--version", 5000);
-            if (npxCheck.StartsWith("ERROR:"))
-            {
-                _lastError = "npx is not available. Please install Node.js";
-                return false;
-            }
-
-            // 检查 playwright 是否安装
-            var playwrightCheck = RunCommand("npx", "playwright --version", 10000);
-            if (playwrightCheck.StartsWith("ERROR:"))
-            {
-                _lastError = "Playwright is not installed";
-                return false;
-            }
-
+            _ = GetPlaywright();
             return true;
         }
-        catch (Exception ex)
+        catch
         {
-            _lastError = $"Failed to check Playwright: {ex.Message}";
             return false;
         }
     }
 
-    private static string _lastError = "";
-
-    /// <summary>
-    /// 运行命令并返回输出
-    /// </summary>
-    private static string RunCommand(string fileName, string arguments, int timeoutMs)
-    {
-        try
-        {
-            var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = fileName,
-                    Arguments = arguments,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }
-            };
-
-            process.Start();
-            var output = process.StandardOutput.ReadToEnd();
-            var error = process.StandardError.ReadToEnd();
-            process.WaitForExit(timeoutMs);
-
-            if (process.ExitCode != 0)
-            {
-                return $"ERROR: {error}";
-            }
-
-            return output;
-        }
-        catch (Exception ex)
-        {
-            return $"ERROR: {ex.Message}";
-        }
-    }
-
-    /// <summary>
-    /// 启动浏览器
-    /// </summary>
     public static Response Launch(BrowserLaunchRequest request)
     {
-        if (!IsAvailable())
-        {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
         try
         {
+            var browserType = NormalizeBrowserType(request.BrowserType);
             var browserId = $"browser_{Interlocked.Increment(ref _browserCounter)}";
-            
-            // 启动浏览器进程
-            var process = new Process
+            var playwright = GetPlaywright();
+            var type = ResolveBrowserType(playwright, browserType);
+
+            IBrowser? browser = null;
+            IBrowserContext? context = null;
+            IPage? page = null;
+
+            try
             {
-                StartInfo = new ProcessStartInfo
+                if (!string.IsNullOrWhiteSpace(request.UserDataDir))
                 {
-                    FileName = "npx",
-                    Arguments = $"playwright launch --browser={request.BrowserType} --headless={request.Headless.ToString().ToLower()}",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
+                    context = LaunchPersistentContext(type, request);
+                    browser = context.Browser;
+                    page = context.Pages.FirstOrDefault() ?? RunSync(() => context.NewPageAsync());
                 }
-            };
-
-            if (!string.IsNullOrEmpty(request.ExecutablePath))
+                else
+                {
+                    browser = LaunchBrowser(type, request);
+                    context = RunSync(() => browser.NewContextAsync());
+                    page = RunSync(() => context.NewPageAsync());
+                }
+            }
+            catch (PlaywrightException ex) when (TryInstallBrowserAndRetry(ex, browserType))
             {
-                process.StartInfo.EnvironmentVariables["PLAYWRIGHT_EXECUTABLE_PATH"] = request.ExecutablePath;
+                if (!string.IsNullOrWhiteSpace(request.UserDataDir))
+                {
+                    context = LaunchPersistentContext(type, request);
+                    browser = context.Browser;
+                    page = context.Pages.FirstOrDefault() ?? RunSync(() => context.NewPageAsync());
+                }
+                else
+                {
+                    browser = LaunchBrowser(type, request);
+                    context = RunSync(() => browser.NewContextAsync());
+                    page = RunSync(() => context.NewPageAsync());
+                }
             }
 
-            process.Start();
-            
-            // 读取启动结果
-            var output = process.StandardOutput.ReadLine();
-            process.WaitForExit(10000);
-
-            if (process.ExitCode != 0)
+            if (context == null || page == null)
             {
-                var error = process.StandardError.ReadToEnd();
-                return new ErrorResponse($"Failed to launch browser: {error}");
+                return new ErrorResponse("Failed to create browser session");
             }
 
-            var instance = new BrowserInstance
+            if (TryGetStringArg(request.Args, "url", out var url))
             {
-                Id = browserId,
-                Type = request.BrowserType,
-                Process = process
-            };
-            Browsers[browserId] = instance;
+                RunSync(() => page.GotoAsync(url));
+            }
+
+            var version = browser?.Version ?? "unknown";
+            Sessions[browserId] = new BrowserSession(browserId, browserType, browser, context, page, version);
 
             return new SuccessResponse<BrowserLaunchResponse>(new BrowserLaunchResponse
             {
                 BrowserId = browserId,
-                BrowserType = request.BrowserType,
-                Version = output?.Trim() ?? "unknown"
+                BrowserType = browserType,
+                Version = version
             });
         }
         catch (Exception ex)
@@ -179,41 +101,28 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 导航到 URL
-    /// </summary>
     public static Response Navigate(BrowserNavigateRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.TryGetValue(request.BrowserId, out var instance))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright navigate --url=\"{request.Url}\"";
-            if (!string.IsNullOrEmpty(request.WaitUntil))
+            var response = RunSync(() => session.Page.GotoAsync(request.Url, new PageGotoOptions
             {
-                args += $" --wait-until={request.WaitUntil}";
-            }
-            if (request.Timeout.HasValue)
-            {
-                args += $" --timeout={request.Timeout.Value}";
-            }
+                WaitUntil = ParseWaitUntil(request.WaitUntil),
+                Timeout = request.Timeout ?? 30000
+            }));
 
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
+            var title = RunSync(() => session.Page.TitleAsync());
+            return new SuccessResponse<BrowserNavigateResponse>(new BrowserNavigateResponse
             {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            var response = JsonSerializer.Deserialize<BrowserNavigateResponse>(result);
-            return new SuccessResponse<BrowserNavigateResponse>(response!);
+                Url = session.Page.Url,
+                Title = title,
+                StatusCode = response?.Status ?? 0
+            });
         }
         catch (Exception ex)
         {
@@ -221,39 +130,25 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 点击元素
-    /// </summary>
     public static Response Click(BrowserClickRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright click --selector=\"{request.Selector}\" --selector-type={request.SelectorType ?? "css"}";
-            
-            if (request.Button.HasValue)
-                args += $" --button={request.Button.Value}";
-            if (request.ClickCount.HasValue)
-                args += $" --click-count={request.ClickCount.Value}";
-            if (request.Timeout.HasValue)
-                args += $" --timeout={request.Timeout.Value}";
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
+            var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+            RunSync(() => locator.ClickAsync(new LocatorClickOptions
             {
-                return new ErrorResponse(result.Substring(6));
-            }
+                Timeout = request.Timeout ?? 30000,
+                Button = ParseMouseButton(request.Button),
+                ClickCount = request.ClickCount ?? 1,
+                Delay = request.Delay ?? 0
+            }));
 
-            return new SuccessResponse<object>(new { Message = $"Element clicked: {request.Selector}" });
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -261,37 +156,34 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 填充输入框
-    /// </summary>
     public static Response Fill(BrowserFillRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright fill --selector=\"{request.Selector}\" --value=\"{request.Value}\" --selector-type={request.SelectorType ?? "css"}";
-            
-            if (!request.Clear)
-                args += " --no-clear";
-            if (request.Timeout.HasValue)
-                args += $" --timeout={request.Timeout.Value}";
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
+            var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+            var timeout = request.Timeout ?? 30000;
+            if (request.Clear)
             {
-                return new ErrorResponse(result.Substring(6));
+                RunSync(() => locator.FillAsync(request.Value, new LocatorFillOptions
+                {
+                    Timeout = timeout
+                }));
+            }
+            else
+            {
+                var currentValue = RunSync(() => locator.InputValueAsync()) ?? string.Empty;
+                RunSync(() => locator.FillAsync($"{currentValue}{request.Value}", new LocatorFillOptions
+                {
+                    Timeout = timeout
+                }));
             }
 
-            return new SuccessResponse<object>(new { Message = $"Element filled: {request.Selector}" });
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -299,36 +191,59 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 查找元素
-    /// </summary>
     public static Response Find(BrowserFindRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright find --selector=\"{request.Selector}\" --selector-type={request.SelectorType ?? "css"}";
-            
-            if (request.Timeout.HasValue)
-                args += $" --timeout={request.Timeout.Value}";
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
+            var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+            var timeout = request.Timeout ?? 5000;
+            var count = RunSync(() => locator.CountAsync());
+            if (count == 0)
             {
-                return new ErrorResponse(result.Substring(6));
+                return new SuccessResponse<BrowserFindResponse>(new BrowserFindResponse { Found = false });
             }
 
-            var response = JsonSerializer.Deserialize<BrowserFindResponse>(result);
-            return new SuccessResponse<BrowserFindResponse>(response!);
+            RunSync(() => locator.WaitForAsync(new LocatorWaitForOptions
+            {
+                Timeout = timeout,
+                State = WaitForSelectorState.Attached
+            }));
+
+            var text = RunSync(() => locator.TextContentAsync()) ?? string.Empty;
+            var value = RunSync(() => locator.InputValueAsync());
+            var box = RunSync(() => locator.BoundingBoxAsync());
+            var tagName = RunSync(() => locator.EvaluateAsync<string>("el => el.tagName.toLowerCase()"));
+            var attributes = RunSync(() => locator.EvaluateAsync<Dictionary<string, string>>(
+                "el => Object.fromEntries(Array.from(el.attributes).map(a => [a.name, a.value]))"));
+
+            return new SuccessResponse<BrowserFindResponse>(new BrowserFindResponse
+            {
+                Found = true,
+                TagName = tagName,
+                Text = text,
+                Value = value,
+                Attributes = attributes,
+                BoundingBox = box == null ? null : new BoundingBox
+                {
+                    X = box.X,
+                    Y = box.Y,
+                    Width = box.Width,
+                    Height = box.Height
+                }
+            });
+        }
+        catch (TimeoutException)
+        {
+            return new SuccessResponse<BrowserFindResponse>(new BrowserFindResponse { Found = false });
+        }
+        catch (PlaywrightException ex) when (ex.Message.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
+        {
+            return new SuccessResponse<BrowserFindResponse>(new BrowserFindResponse { Found = false });
         }
         catch (Exception ex)
         {
@@ -336,40 +251,30 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 获取页面文本
-    /// </summary>
     public static Response GetText(BrowserGetTextRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = "playwright get-text";
-            
-            if (!string.IsNullOrEmpty(request.Selector))
+            string text;
+            if (!string.IsNullOrWhiteSpace(request.Selector))
             {
-                args += $" --selector=\"{request.Selector}\" --selector-type={request.SelectorType ?? "css"}";
+                var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+                text = RunSync(() => locator.TextContentAsync()) ?? string.Empty;
             }
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
+            else
             {
-                return new ErrorResponse(result.Substring(6));
+                text = RunSync(() => session.Page.EvaluateAsync<string>("() => document.body?.innerText ?? ''"));
             }
 
             return new SuccessResponse<BrowserGetTextResponse>(new BrowserGetTextResponse
             {
-                Text = result.Trim(),
-                Selector = request.Selector
+                Selector = request.Selector,
+                Text = text
             });
         }
         catch (Exception ex)
@@ -378,47 +283,51 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 页面截图
-    /// </summary>
     public static Response Screenshot(BrowserScreenshotRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var outputPath = request.OutputPath ?? Path.Combine(Path.GetTempPath(), $"browser_screenshot_{DateTimeOffset.Now.ToUnixTimeMilliseconds()}.png");
-            
-            var args = $"playwright screenshot --output=\"{outputPath}\" --type={request.Type}";
-            
-            if (!string.IsNullOrEmpty(request.Selector))
-            {
-                args += $" --selector=\"{request.Selector}\" --selector-type={request.SelectorType ?? "css"}";
-            }
-            if (request.FullPage == true)
-                args += " --full-page";
-            if (request.Quality.HasValue)
-                args += $" --quality={request.Quality.Value}";
+            var outputPath = request.OutputPath
+                ?? Path.Combine(Path.GetTempPath(), $"browser_screenshot_{DateTimeOffset.Now.ToUnixTimeMilliseconds()}.{request.Type}");
 
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
+            if (!string.IsNullOrWhiteSpace(request.Selector))
             {
-                return new ErrorResponse(result.Substring(6));
+                var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+                RunSync(() => locator.ScreenshotAsync(new LocatorScreenshotOptions
+                {
+                    Path = outputPath,
+                    Type = ParseScreenshotType(request.Type),
+                    Quality = request.Quality
+                }));
+
+                var box = RunSync(() => locator.BoundingBoxAsync());
+                return new SuccessResponse<BrowserScreenshotResponse>(new BrowserScreenshotResponse
+                {
+                    ImagePath = outputPath,
+                    Width = box == null ? 0 : (int)Math.Round(box.Width),
+                    Height = box == null ? 0 : (int)Math.Round(box.Height)
+                });
             }
 
+            RunSync(() => session.Page.ScreenshotAsync(new PageScreenshotOptions
+            {
+                Path = outputPath,
+                Type = ParseScreenshotType(request.Type),
+                FullPage = request.FullPage ?? false,
+                Quality = request.Quality
+            }));
+
+            var viewport = session.Page.ViewportSize;
             return new SuccessResponse<BrowserScreenshotResponse>(new BrowserScreenshotResponse
             {
                 ImagePath = outputPath,
-                Width = 0,
-                Height = 0
+                Width = viewport?.Width ?? 0,
+                Height = viewport?.Height ?? 0
             });
         }
         catch (Exception ex)
@@ -427,47 +336,32 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 执行 JavaScript
-    /// </summary>
     public static Response Evaluate(BrowserEvaluateRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            // 将脚本写入临时文件
-            var tempScriptFile = Path.Combine(Path.GetTempPath(), $"script_{Guid.NewGuid()}.js");
-            File.WriteAllText(tempScriptFile, request.Script);
-
-            var args = $"playwright evaluate --script-file=\"{tempScriptFile}\"";
-
-            if (request.Args?.Length > 0)
+            object? arg = null;
+            if (request.Args is { Length: 1 })
             {
-                args += $" --args=\"{JsonSerializer.Serialize(request.Args).Replace("\"", "\\\"")}\"";
+                arg = request.Args[0];
+            }
+            else if (request.Args is { Length: > 1 })
+            {
+                arg = request.Args;
             }
 
-            var result = ExecutePlaywrightCommand(args);
-            
-            try { File.Delete(tempScriptFile); } catch { }
-
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
+            var result = RunSync(() => session.Page.EvaluateAsync<JsonElement?>(request.Script, arg));
+            var resultType = result?.ValueKind.ToString().ToLowerInvariant() ?? "undefined";
 
             return new SuccessResponse<BrowserEvaluateResponse>(new BrowserEvaluateResponse
             {
-                Result = result.Trim(),
-                ResultType = "string"
+                Result = result,
+                ResultType = resultType
             });
         }
         catch (Exception ex)
@@ -476,35 +370,23 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 等待元素
-    /// </summary>
     public static Response WaitFor(BrowserWaitForRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright wait-for --selector=\"{request.Selector}\" --selector-type={request.SelectorType ?? "css"} --state={request.State ?? "visible"}";
-            
-            if (request.Timeout.HasValue)
-                args += $" --timeout={request.Timeout.Value}";
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
+            var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+            RunSync(() => locator.WaitForAsync(new LocatorWaitForOptions
             {
-                return new ErrorResponse(result.Substring(6));
-            }
+                Timeout = request.Timeout ?? 30000,
+                State = ParseWaitForState(request.State)
+            }));
 
-            return new SuccessResponse<object>(new { Message = $"Element {request.State}: {request.Selector}" });
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -512,107 +394,69 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 获取浏览器列表
-    /// </summary>
-    public static Response List(BrowserListRequest request)
+    public static Response AssertText(BrowserAssertTextRequest request)
     {
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
+        {
+            return new ErrorResponse(error);
+        }
+
         try
         {
-            var browsers = Browsers.Values.Select(b => new BrowserInfo
+            var actual = string.Empty;
+            if (!string.IsNullOrWhiteSpace(request.Selector))
             {
-                Id = b.Id,
-                Type = b.Type,
-                Version = b.Version,
-                IsConnected = IsBrowserConnected(b)
-            }).ToList();
+                var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+                actual = RunSync(() => locator.TextContentAsync()) ?? string.Empty;
+            }
+            else
+            {
+                actual = RunSync(() => session.Page.EvaluateAsync<string>("() => document.body?.innerText ?? ''"));
+            }
 
-            return new SuccessResponse<BrowserListResponse>(new BrowserListResponse
+            var expected = request.ExpectedText ?? string.Empty;
+            var comparison = request.IgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var passed = request.ExactMatch
+                ? string.Equals(actual.Trim(), expected.Trim(), comparison)
+                : actual.Contains(expected, comparison);
+
+            return new SuccessResponse<BrowserAssertTextResponse>(new BrowserAssertTextResponse
             {
-                Browsers = browsers
+                Passed = passed,
+                ExpectedText = expected,
+                ActualText = actual
             });
         }
         catch (Exception ex)
         {
-            return new ErrorResponse($"List failed: {ex.Message}");
+            return new ErrorResponse($"AssertText failed: {ex.Message}");
         }
     }
 
-    private static bool IsBrowserConnected(BrowserInstance instance)
-    {
-        if (instance.Process != null)
-        {
-            try
-            {
-                return !instance.Process.HasExited;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// 关闭浏览器
-    /// </summary>
-    public static Response Close(BrowserCloseRequest request)
-    {
-        if (!Browsers.TryGetValue(request.BrowserId, out var instance))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
-        }
-
-        try
-        {
-            if (instance.Process != null && !instance.Process.HasExited)
-            {
-                if (request.Force)
-                {
-                    instance.Process.Kill();
-                }
-                else
-                {
-                    instance.Process.CloseMainWindow();
-                }
-                instance.Process.WaitForExit(5000);
-            }
-
-            Browsers.Remove(request.BrowserId);
-            return new SuccessResponse<object>(new { Message = $"Browser closed: {request.BrowserId}" });
-        }
-        catch (Exception ex)
-        {
-            return new ErrorResponse($"Close failed: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// 获取页面信息
-    /// </summary>
     public static Response GetPageInfo(BrowserGetPageInfoRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var result = ExecutePlaywrightCommand("playwright page-info");
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
+            var title = RunSync(() => session.Page.TitleAsync());
+            var metrics = RunSync(() => session.Page.EvaluateAsync<PageMetrics>(
+                "() => ({ scrollX: window.scrollX, scrollY: window.scrollY, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, pageWidth: document.documentElement.scrollWidth, pageHeight: document.documentElement.scrollHeight })"));
 
-            var response = JsonSerializer.Deserialize<BrowserGetPageInfoResponse>(result);
-            return new SuccessResponse<BrowserGetPageInfoResponse>(response!);
+            return new SuccessResponse<BrowserGetPageInfoResponse>(new BrowserGetPageInfoResponse
+            {
+                Url = session.Page.Url,
+                Title = title,
+                ScrollX = metrics.ScrollX,
+                ScrollY = metrics.ScrollY,
+                ViewportWidth = metrics.ViewportWidth,
+                ViewportHeight = metrics.ViewportHeight,
+                PageWidth = metrics.PageWidth,
+                PageHeight = metrics.PageHeight
+            });
         }
         catch (Exception ex)
         {
@@ -620,38 +464,21 @@ public static class BrowserModule
         }
     }
 
-    // ==================== 新增功能 ====================
-
-    /// <summary>
-    /// 后退
-    /// </summary>
     public static Response GoBack(BrowserGoBackRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright go-back --browser-id={request.BrowserId}";
-            if (request.Timeout.HasValue)
+            RunSync(() => session.Page.GoBackAsync(new PageGoBackOptions
             {
-                args += $" --timeout={request.Timeout.Value}";
-            }
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            return new SuccessResponse<object>(new { Message = "Navigated back" });
+                Timeout = request.Timeout ?? 30000,
+                WaitUntil = WaitUntilState.Load
+            }));
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -659,36 +486,21 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 前进
-    /// </summary>
     public static Response GoForward(BrowserGoForwardRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright go-forward --browser-id={request.BrowserId}";
-            if (request.Timeout.HasValue)
+            RunSync(() => session.Page.GoForwardAsync(new PageGoForwardOptions
             {
-                args += $" --timeout={request.Timeout.Value}";
-            }
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            return new SuccessResponse<object>(new { Message = "Navigated forward" });
+                Timeout = request.Timeout ?? 30000,
+                WaitUntil = WaitUntilState.Load
+            }));
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -696,36 +508,21 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 刷新页面
-    /// </summary>
     public static Response Reload(BrowserReloadRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright reload --browser-id={request.BrowserId}";
-            if (request.Timeout.HasValue)
+            RunSync(() => session.Page.ReloadAsync(new PageReloadOptions
             {
-                args += $" --timeout={request.Timeout.Value}";
-            }
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            return new SuccessResponse<object>(new { Message = "Page reloaded" });
+                Timeout = request.Timeout ?? 30000,
+                WaitUntil = WaitUntilState.Load
+            }));
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -733,41 +530,27 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 滚动页面
-    /// </summary>
     public static Response Scroll(BrowserScrollRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright scroll --browser-id={request.BrowserId} --x={request.X ?? 0} --y={request.Y ?? 0}";
-            
-            if (!string.IsNullOrEmpty(request.Selector))
+            var x = request.X ?? 0;
+            var y = request.Y ?? 0;
+            if (!string.IsNullOrWhiteSpace(request.Selector))
             {
-                args += $" --selector=\"{request.Selector}\" --selector-type={request.SelectorType ?? "css"}";
+                var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+                RunSync(() => locator.EvaluateAsync("([dx, dy]) => this.scrollBy(dx, dy)", new object[] { x, y }));
             }
-            if (!string.IsNullOrEmpty(request.Behavior))
+            else
             {
-                args += $" --behavior={request.Behavior}";
+                RunSync(() => session.Page.EvaluateAsync("([dx, dy]) => window.scrollBy(dx, dy)", new object[] { x, y }));
             }
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            return new SuccessResponse<object>(new { Message = "Scrolled" });
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -775,37 +558,19 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 选择下拉框选项
-    /// </summary>
     public static Response Select(BrowserSelectRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright select --browser-id={request.BrowserId} --selector=\"{request.Selector}\" --values=\"{string.Join(",", request.Values)}\"";
-            
-            if (!string.IsNullOrEmpty(request.SelectorType))
-            {
-                args += $" --selector-type={request.SelectorType}";
-            }
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            return new SuccessResponse<object>(new { Message = $"Selected: {string.Join(", ", request.Values)}" });
+            var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+            var values = request.Values.Select(v => new SelectOptionValue { Value = v }).ToArray();
+            RunSync(() => locator.SelectOptionAsync(values));
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -813,37 +578,18 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 上传文件
-    /// </summary>
     public static Response Upload(BrowserUploadRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright upload --browser-id={request.BrowserId} --selector=\"{request.Selector}\" --files=\"{string.Join(",", request.Files)}\"";
-            
-            if (!string.IsNullOrEmpty(request.SelectorType))
-            {
-                args += $" --selector-type={request.SelectorType}";
-            }
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            return new SuccessResponse<object>(new { Message = $"Uploaded: {string.Join(", ", request.Files)}" });
+            var locator = session.Page.Locator(BuildSelector(request.Selector, request.SelectorType)).First;
+            RunSync(() => locator.SetInputFilesAsync(request.Files));
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -851,38 +597,29 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 获取 Cookies
-    /// </summary>
     public static Response GetCookies(BrowserGetCookiesRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright get-cookies --browser-id={request.BrowserId}";
-            
-            if (!string.IsNullOrEmpty(request.Url))
+            var urls = string.IsNullOrWhiteSpace(request.Url) ? null : new[] { request.Url };
+            var cookies = RunSync(() => session.Context.CookiesAsync(urls));
+            var result = cookies.Select(c => new BrowserCookie
             {
-                args += $" --url=\"{request.Url}\"";
-            }
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            var cookies = JsonSerializer.Deserialize<List<BrowserCookie>>(result);
-            return new SuccessResponse<List<BrowserCookie>>(cookies!);
+                Name = c.Name,
+                Value = c.Value,
+                Domain = c.Domain,
+                Path = c.Path,
+                Expires = c.Expires == -1 ? null : (long?)c.Expires,
+                HttpOnly = c.HttpOnly,
+                Secure = c.Secure,
+                SameSite = c.SameSite.ToString()
+            }).ToArray();
+            return new SuccessResponse<object>(new { Cookies = result });
         }
         catch (Exception ex)
         {
@@ -890,57 +627,30 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 设置 Cookie
-    /// </summary>
     public static Response SetCookie(BrowserSetCookieRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright set-cookie --browser-id={request.BrowserId} --name=\"{request.Name}\" --value=\"{request.Value}\"";
-            
-            if (!string.IsNullOrEmpty(request.Domain))
+            RunSync(() => session.Context.AddCookiesAsync(new[]
             {
-                args += $" --domain=\"{request.Domain}\"";
-            }
-            if (!string.IsNullOrEmpty(request.Path))
-            {
-                args += $" --path=\"{request.Path}\"";
-            }
-            if (request.Expires.HasValue)
-            {
-                args += $" --expires={request.Expires.Value}";
-            }
-            if (request.HttpOnly)
-            {
-                args += " --http-only";
-            }
-            if (request.Secure)
-            {
-                args += " --secure";
-            }
-            if (!string.IsNullOrEmpty(request.SameSite))
-            {
-                args += $" --same-site={request.SameSite}";
-            }
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            return new SuccessResponse<object>(new { Message = $"Cookie set: {request.Name}" });
+                new Cookie
+                {
+                    Name = request.Name,
+                    Value = request.Value,
+                    Domain = request.Domain,
+                    Path = request.Path,
+                    Expires = request.Expires,
+                    HttpOnly = request.HttpOnly,
+                    Secure = request.Secure,
+                    SameSite = ParseSameSite(request.SameSite)
+                }
+            }));
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -948,32 +658,17 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 清除所有 Cookies
-    /// </summary>
     public static Response ClearCookies(BrowserClearCookiesRequest request)
     {
-        if (!IsAvailable())
+        if (!TryGetSession(request.BrowserId, out var session, out var error))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse(error);
         }
 
         try
         {
-            var args = $"playwright clear-cookies --browser-id={request.BrowserId}";
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            return new SuccessResponse<object>(new { Message = "Cookies cleared" });
+            RunSync(() => session.Context.ClearCookiesAsync());
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
@@ -981,204 +676,320 @@ public static class BrowserModule
         }
     }
 
-    /// <summary>
-    /// 添加网络路由拦截
-    /// </summary>
-    public static Response AddRoute(BrowserRouteRequest request)
+    public static Response List(BrowserListRequest request)
     {
-        if (!IsAvailable())
+        var result = new BrowserListResponse();
+        foreach (var session in Sessions.Values.OrderBy(s => s.BrowserId))
         {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
+            var title = string.Empty;
+            try
+            {
+                title = RunSync(() => session.Page.TitleAsync());
+            }
+            catch
+            {
+                title = string.Empty;
+            }
+
+            result.Browsers.Add(new BrowserInfo
+            {
+                Id = session.BrowserId,
+                Type = session.BrowserType,
+                Version = session.Version,
+                CurrentUrl = session.Page.Url,
+                CurrentTitle = title,
+                IsConnected = session.Browser?.IsConnected ?? true
+            });
         }
 
-        if (!Browsers.ContainsKey(request.BrowserId))
+        return new SuccessResponse<BrowserListResponse>(result);
+    }
+
+    public static Response Close(BrowserCloseRequest request)
+    {
+        if (!Sessions.TryRemove(request.BrowserId, out var session))
         {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
+            return new ErrorResponse($"Browser not found: {request.BrowserId}");
         }
 
         try
         {
-            var args = $"playwright route --browser-id={request.BrowserId} --url=\"{request.Url}\" --action={request.Action}";
-            
-            if (request.StatusCode.HasValue)
+            RunSync(() => session.Context.CloseAsync());
+            if (session.Browser != null)
             {
-                args += $" --status-code={request.StatusCode.Value}";
-            }
-            if (!string.IsNullOrEmpty(request.Body))
-            {
-                args += $" --body=\"{request.Body}\"";
+                RunSync(() => session.Browser.CloseAsync());
             }
 
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            var response = JsonSerializer.Deserialize<BrowserRouteResponse>(result);
-            return new SuccessResponse<BrowserRouteResponse>(response!);
+            return new SuccessResponse();
         }
         catch (Exception ex)
         {
-            return new ErrorResponse($"AddRoute failed: {ex.Message}");
+            return new ErrorResponse($"Close failed: {ex.Message}");
         }
     }
 
-    /// <summary>
-    /// 移除网络路由拦截
-    /// </summary>
-    public static Response RemoveRoute(BrowserUnrouteRequest request)
-    {
-        if (!IsAvailable())
-        {
-            return new ErrorResponse(GetPlaywrightNotInstalledMessage());
-        }
-
-        if (!Browsers.ContainsKey(request.BrowserId))
-        {
-            return new ErrorResponse($"Browser {request.BrowserId} not found");
-        }
-
-        try
-        {
-            var args = $"playwright unroute --browser-id={request.BrowserId} --route-id=\"{request.RouteId}\"";
-
-            var result = ExecutePlaywrightCommand(args);
-            if (result.StartsWith("ERROR:"))
-            {
-                return new ErrorResponse(result.Substring(6));
-            }
-
-            return new SuccessResponse<object>(new { Message = "Route removed" });
-        }
-        catch (Exception ex)
-        {
-            return new ErrorResponse($"RemoveRoute failed: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// 关闭所有浏览器
-    /// </summary>
-    public static void CloseAll()
-    {
-        foreach (var browserId in Browsers.Keys.ToList())
-        {
-            Close(new BrowserCloseRequest { BrowserId = browserId, Force = true });
-        }
-    }
-
-    /// <summary>
-    /// 执行 Playwright 命令
-    /// </summary>
-    private static string ExecutePlaywrightCommand(string arguments)
+    public static Response Codegen(BrowserCodegenRequest request)
     {
         try
         {
-            var process = new Process
+            var browserType = NormalizeBrowserType(request.BrowserType ?? "chromium");
+            var args = new List<string> { "codegen", "--browser", browserType };
+            if (!string.IsNullOrWhiteSpace(request.Url))
             {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "npx",
-                    Arguments = arguments,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }
-            };
-
-            process.Start();
-            var output = process.StandardOutput.ReadToEnd();
-            var error = process.StandardError.ReadToEnd();
-            process.WaitForExit(30000);
-
-            if (process.ExitCode != 0)
-            {
-                return $"ERROR: {error}";
+                args.Add(request.Url);
             }
 
-            return output;
+            _ = Task.Run(() => Microsoft.Playwright.Program.Main(args.ToArray()));
+            return new SuccessResponse<object>(new
+            {
+                Message = "Codegen started"
+            });
         }
         catch (Exception ex)
         {
-            return $"ERROR: {ex.Message}";
+            return new ErrorResponse($"Codegen failed: {ex.Message}");
         }
     }
 
-    /// <summary>
-    /// 获取 Playwright 未安装的提示信息
-    /// </summary>
-    private static string GetPlaywrightNotInstalledMessage()
+    public static Response RunScript(BrowserRunScriptRequest request)
     {
-        var osName = OperatingSystem.IsWindows() ? "Windows" :
-                     OperatingSystem.IsLinux() ? "Linux" : "macOS";
-        
-        var message = $@"❌ Browser automation is not available
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.ScriptPath))
+            {
+                return new ErrorResponse("ScriptPath is required");
+            }
 
-Detected Issue: {_lastError}
+            var scriptPath = Path.GetFullPath(request.ScriptPath);
+            if (!File.Exists(scriptPath))
+            {
+                return new ErrorResponse($"Script file not found: {scriptPath}");
+            }
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔧 Installation Guide for {osName}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            var browserType = NormalizeBrowserType(request.BrowserType);
+            var args = new List<string> { "test", scriptPath, "--browser", MapCliBrowser(browserType) };
+            if (browserType == "edge")
+            {
+                args.Add("--channel");
+                args.Add("msedge");
+            }
+            if (!request.Headless)
+            {
+                args.Add("--headed");
+            }
+            if (request.Timeout.HasValue && request.Timeout.Value > 0)
+            {
+                args.Add("--timeout");
+                args.Add(request.Timeout.Value.ToString());
+            }
+            if (request.ExtraArgs is { Length: > 0 })
+            {
+                args.AddRange(request.ExtraArgs.Where(a => !string.IsNullOrWhiteSpace(a)));
+            }
 
-Step 1: Install Node.js
-   • Download from: https://nodejs.org/
-   • Recommended: LTS version (16.x or higher)
-   • Verify: node --version
-
-Step 2: Install Playwright
-   npm install -g playwright
-
-Step 3: Install Browser Binaries
-   # Install Chromium only (recommended, ~100MB)
-   npx playwright install chromium
-   
-   # Or install all browsers (~500MB)
-   npx playwright install
-
-Step 4: Verify Installation
-   npx playwright --version
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📚 Documentation: BROWSER_SETUP.md
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Note: Browser binaries will be downloaded to:
-   {GetPlaywrightCachePath()}
-
-After installation, restart EasyTouch.";
-
-        return message;
+            var exitCode = Microsoft.Playwright.Program.Main(args.ToArray());
+            return new SuccessResponse<BrowserRunScriptResponse>(new BrowserRunScriptResponse
+            {
+                ExitCode = exitCode,
+                Success = exitCode == 0,
+                Command = $"playwright {string.Join(" ", args.Select(QuoteArgForDisplay))}"
+            });
+        }
+        catch (Exception ex)
+        {
+            return new ErrorResponse($"RunScript failed: {ex.Message}");
+        }
     }
 
-    /// <summary>
-    /// 获取 Playwright 缓存路径
-    /// </summary>
-    private static string GetPlaywrightCachePath()
+    private static bool TryGetSession(string browserId, out BrowserSession session, out string error)
     {
-        if (OperatingSystem.IsWindows())
+        if (Sessions.TryGetValue(browserId, out session!))
         {
-            return "%LOCALAPPDATA%\\ms-playwright";
+            error = string.Empty;
+            return true;
         }
-        else if (OperatingSystem.IsMacOS())
-        {
-            return "~/Library/Caches/ms-playwright";
-        }
-        else
-        {
-            return "~/.cache/ms-playwright";
-        }
+
+        error = $"Browser not found: {browserId}";
+        return false;
     }
 
-    /// <summary>
-    /// 浏览器实例
-    /// </summary>
-    private class BrowserInstance
+    private static string BuildSelector(string selector, string? selectorType)
     {
-        public string Id { get; set; } = string.Empty;
-        public string Type { get; set; } = string.Empty;
-        public string Version { get; set; } = string.Empty;
-        public Process? Process { get; set; }
+        var type = (selectorType ?? "css").Trim().ToLowerInvariant();
+        return type switch
+        {
+            "xpath" => $"xpath={selector}",
+            "text" => $"text={selector}",
+            "id" => $"#{selector.TrimStart('#')}",
+            _ => selector
+        };
     }
+
+    private static bool TryGetStringArg(Dictionary<string, object>? args, string key, out string value)
+    {
+        value = string.Empty;
+        if (args == null || !args.TryGetValue(key, out var raw) || raw == null)
+        {
+            return false;
+        }
+
+        value = raw.ToString() ?? string.Empty;
+        return !string.IsNullOrWhiteSpace(value);
+    }
+
+    private static IBrowserType ResolveBrowserType(IPlaywright playwright, string browserType)
+    {
+        return browserType switch
+        {
+            "firefox" => playwright.Firefox,
+            "webkit" => playwright.Webkit,
+            _ => playwright.Chromium
+        };
+    }
+
+    private static string NormalizeBrowserType(string browserType)
+    {
+        var type = browserType.Trim().ToLowerInvariant();
+        return type switch
+        {
+            "msedge" => "edge",
+            "chromium" or "firefox" or "webkit" or "edge" => type,
+            _ => "chromium"
+        };
+    }
+
+    private static IBrowser LaunchBrowser(IBrowserType browserType, BrowserLaunchRequest request)
+    {
+        return RunSync(() => browserType.LaunchAsync(new BrowserTypeLaunchOptions
+        {
+            Headless = request.Headless,
+            Channel = GetBrowserChannel(request.BrowserType),
+            ExecutablePath = string.IsNullOrWhiteSpace(request.ExecutablePath) ? null : request.ExecutablePath
+        }));
+    }
+
+    private static IBrowserContext LaunchPersistentContext(IBrowserType browserType, BrowserLaunchRequest request)
+    {
+        var userDataDir = request.UserDataDir!;
+        Directory.CreateDirectory(userDataDir);
+        return RunSync(() => browserType.LaunchPersistentContextAsync(userDataDir, new BrowserTypeLaunchPersistentContextOptions
+        {
+            Headless = request.Headless,
+            Channel = GetBrowserChannel(request.BrowserType),
+            ExecutablePath = string.IsNullOrWhiteSpace(request.ExecutablePath) ? null : request.ExecutablePath
+        }));
+    }
+
+    private static bool TryInstallBrowserAndRetry(PlaywrightException ex, string browserType)
+    {
+        if (!ex.Message.Contains("Executable doesn't exist", StringComparison.OrdinalIgnoreCase) &&
+            !ex.Message.Contains("browser has not been found", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var installTarget = browserType == "edge" ? "chromium" : browserType;
+        var code = Microsoft.Playwright.Program.Main(new[] { "install", installTarget });
+        return code == 0;
+    }
+
+    private static string? GetBrowserChannel(string? browserType)
+    {
+        var normalized = NormalizeBrowserType(browserType ?? "chromium");
+        return normalized == "edge" ? "msedge" : null;
+    }
+
+    private static string MapCliBrowser(string browserType)
+    {
+        return browserType == "edge" ? "chromium" : browserType;
+    }
+
+    private static string QuoteArgForDisplay(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return "\"\"";
+        }
+
+        return value.Any(char.IsWhiteSpace) ? $"\"{value}\"" : value;
+    }
+
+    private static WaitUntilState ParseWaitUntil(string? waitUntil)
+    {
+        return (waitUntil ?? "load").Trim().ToLowerInvariant() switch
+        {
+            "domcontentloaded" => WaitUntilState.DOMContentLoaded,
+            "networkidle" => WaitUntilState.NetworkIdle,
+            _ => WaitUntilState.Load
+        };
+    }
+
+    private static WaitForSelectorState ParseWaitForState(string? state)
+    {
+        return (state ?? "visible").Trim().ToLowerInvariant() switch
+        {
+            "hidden" => WaitForSelectorState.Hidden,
+            "attached" => WaitForSelectorState.Attached,
+            "detached" => WaitForSelectorState.Detached,
+            _ => WaitForSelectorState.Visible
+        };
+    }
+
+    private static SameSiteAttribute? ParseSameSite(string? value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "strict" => SameSiteAttribute.Strict,
+            "lax" => SameSiteAttribute.Lax,
+            "none" => SameSiteAttribute.None,
+            _ => null
+        };
+    }
+
+    private static Microsoft.Playwright.MouseButton ParseMouseButton(int? button)
+    {
+        return button switch
+        {
+            1 => Microsoft.Playwright.MouseButton.Middle,
+            2 => Microsoft.Playwright.MouseButton.Right,
+            _ => Microsoft.Playwright.MouseButton.Left
+        };
+    }
+
+    private static ScreenshotType ParseScreenshotType(string? type)
+    {
+        return string.Equals(type, "jpeg", StringComparison.OrdinalIgnoreCase) ? ScreenshotType.Jpeg : ScreenshotType.Png;
+    }
+
+    private static IPlaywright GetPlaywright() => RunSync(() => PlaywrightLazy.Value);
+
+    private static T RunSync<T>(Func<Task<T>> action) => action().GetAwaiter().GetResult();
+
+    private static void RunSync(Func<Task> action) => action().GetAwaiter().GetResult();
+
+    private sealed class PageMetrics
+    {
+        public int ScrollX { get; set; }
+        public int ScrollY { get; set; }
+        public int ViewportWidth { get; set; }
+        public int ViewportHeight { get; set; }
+        public int PageWidth { get; set; }
+        public int PageHeight { get; set; }
+    }
+
+    private sealed record BrowserSession(
+        string BrowserId,
+        string BrowserType,
+        IBrowser? Browser,
+        IBrowserContext Context,
+        IPage Page,
+        string Version);
+}
+
+public class BrowserCodegenRequest : Request
+{
+    public string? BrowserType { get; set; }
+    public string? Url { get; set; }
+    public string? OutputFile { get; set; }
+    public string? Target { get; set; }
 }

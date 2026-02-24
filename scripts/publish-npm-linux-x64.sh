@@ -47,20 +47,20 @@ fi
 cp "$PROJECT_DIR/npx/linux/package.json" "$TEMP_DIR/package.json"
 cp "$PROJECT_DIR/npx/linux/SKILL.md" "$TEMP_DIR/SKILL.md" 2>/dev/null || true
 cp "$PROJECT_DIR/npx/linux/install.js" "$TEMP_DIR/install.js" 2>/dev/null || true
+cp "$PROJECT_DIR/README.md" "$TEMP_DIR/README.md" 2>/dev/null || true
 
 # Update version
 sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$TEMP_DIR/package.json"
 
-# 2. Build AOT executable
-echo "🔨 Building AOT executable for linux-x64..."
+# 2. Build executable (Playwright is not compatible with NativeAOT)
+echo "🔨 Building executable for linux-x64 (AOT disabled for Playwright compatibility)..."
 dotnet publish "$PROJECT_DIR/EasyTouch-Linux/EasyTouch-Linux.csproj" \
     -c Release \
     -r linux-x64 \
     --self-contained true \
-    -p:PublishAot=true \
+    -p:PublishAot=false \
     -p:PublishSingleFile=true \
-    -p:PublishTrimmed=true \
-    -p:TrimMode=full \
+    -p:PublishTrimmed=false \
     -o "$TEMP_DIR"
 
 # 3. Copy Playwright bridge script

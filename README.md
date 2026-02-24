@@ -6,7 +6,7 @@
 
 - [x] Windows
 - [ ] Linux
-- [ ] MAC
+- [ ] MAC（目前缺少设备验证功能）
 
 
 
@@ -24,13 +24,11 @@
 
 
 
-提示：在 Linux 里，由于桌面环境复杂，因此工具可能会失败。
+提示：在 Linux 里，由于桌面环境差异很大，有些功能在某些桌面系统下可能不可用，详见 [Linux](#Linux) 环境说明。
 
 
 
-## 安装
-
-### NPM 安装（推荐）
+### 安装
 
 ```bash
 # Windows
@@ -45,7 +43,7 @@ npm i @whuanle/easytouch-mac
 
 
 
-或者从 [GitHub Releases](../../releases) 下载对应平台的可执行文件，并添加环境变量。
+或者从[https://github.com/whuanle/EasyTouch/releases](https://github.com/whuanle/EasyTouch/releases)下载对应平台的可执行文件，并添加环境变量。
 
 
 
@@ -82,27 +80,34 @@ Commands:
 
 ### 浏览器操作支持
 
-EasyTouch 操作浏览器需要依赖 playwright，可以通过命令一键安装对应的环境：
+支持浏览器：`chromium` / `firefox` / `webkit` / `edge`（`edge` 走 Chromium 通道 `msedge`）。
+
+首次使用浏览器功能时，程序会自动尝试安装对应浏览器内核（Chromium/Firefox/WebKit），无需手动执行 `npx playwright install`。
+
+如果你希望提前安装，可以直接执行一次浏览器命令触发安装：
 
 ```bash
-npm install @playwright/test
+et browser_launch --browser chromium --headless true
+et browser_launch --browser edge --headless true
 ```
 
 
 
-你可以通过哦哦脚本快速安装 chromium 浏览器。
+### 作为 Skills 给 AI 使用
 
-```
-npx playwright install chromium
+只需要执行命令安装 skills 即可。
+
+```bash
+npx skills add https://github.com/whuanle/EasyTouch/skills
 ```
 
 
 
 ### 作为 MCP 工具使用
 
-在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异。
+如果只是给 AI 工具使用，建议使用 skills 即可，配置 MCP 可能会麻烦一些。
 
-通过 npm/bun 等方式安装的 EasyTouch，程序文件在 `C:\Users\{用户名}\AppData\Roaming\npm` 下面。
+在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异，通过 npm/bun 等方式安装的 EasyTouch，程序文件在 `$basedir/node_modules/@whuanle/easytouch-windows` 下面，。
 
 
 
@@ -148,14 +153,6 @@ npx playwright install chromium
 ```
 
 
-
-### 作为 Skills 给 AI 使用
-
-只需要执行命令安装 skills 即可。
-
-```bash
-npx skills add https://github.com/whuanle/EasyTouch/skills
-```
 
 
 
@@ -284,6 +281,12 @@ et clipboard_get_files
 
 ### 浏览器控制
 
+
+
+使用 `et browser_launch --browser` 命令启动浏览器后（匿名模式），使用 `et browser_list` 获取浏览器实例列表，之后可以使用不同的命令控制浏览器，最后可以自行关闭或使用 `et browser_close` 关闭浏览器。
+
+
+
 ```bash
 # 列出浏览器实例
 et browser_list
@@ -291,8 +294,16 @@ et browser_list
 # 启动 Chromium（无头模式）
 et browser_launch --browser chromium --headless
 
+# 启动 Edge（有界面）
+et browser_launch --browser edge --headless false
+
 # 打开页面
 et browser_navigate --browser-id <id> --url "https://example.com"
+
+# 导航控制
+et browser_go_back --browser-id <id>
+et browser_go_forward --browser-id <id>
+et browser_reload --browser-id <id>
 
 # 点击元素
 et browser_click --browser-id <id> --selector "#submit"
@@ -300,11 +311,37 @@ et browser_click --browser-id <id> --selector "#submit"
 # 输入内容
 et browser_fill --browser-id <id> --selector "input[name='q']" --value "EasyTouch"
 
+# 滚动页面（按像素）
+et browser_scroll --browser-id <id> --x 0 --y 800 --behavior smooth
+
+# 下拉选择
+et browser_select --browser-id <id> --selector "#city" --values "beijing"
+
+# 文件上传（多个文件用逗号分隔）
+et browser_upload --browser-id <id> --selector "input[type='file']" --files "a.txt,b.txt"
+
 # 页面截图
 et browser_screenshot --browser-id <id> --output page.png --full-page true
 
 # 执行脚本
 et browser_evaluate --browser-id <id> --script "document.title"
+
+# 读取页面信息
+et browser_page_info --browser-id <id>
+
+# Cookie 管理
+et browser_get_cookies --browser-id <id>
+et browser_set_cookie --browser-id <id> --name token --value abc --domain example.com --path / --http-only true --secure true --same-site lax
+et browser_clear_cookies --browser-id <id>
+
+# 执行本地 JS/TS Playwright 测试脚本
+et browser_run_script --script-path "./tests/example.spec.ts" --browser edge --headless true
+
+# 透传 Playwright CLI 参数（CSV）
+et browser_run_script --script-path "./tests/login.spec.ts" --browser chromium --extra-args "--reporter=list,--workers=1"
+
+# 文本断言（自动化测试）
+et browser_assert_text --browser-id <id> --selector "h1" --expected-text "Example Domain" --exact-match true
 
 # 关闭浏览器
 et browser_close --browser-id <id>
@@ -339,6 +376,14 @@ et browser_close --browser-id <id>
 | `browser_screenshot` | 浏览器截图 |
 | `browser_evaluate` | 执行页面脚本 |
 | `browser_wait_for` | 等待元素状态 |
+| `browser_assert_text` | 断言页面或元素文本 |
+| `browser_page_info` | 获取页面信息 |
+| `browser_go_back` / `browser_go_forward` / `browser_reload` | 页面导航控制 |
+| `browser_scroll` | 页面/元素滚动 |
+| `browser_select` | 下拉选择 |
+| `browser_upload` | 文件上传 |
+| `browser_get_cookies` / `browser_set_cookie` / `browser_clear_cookies` | Cookie 管理 |
+| `browser_run_script` | 执行 JS/TS Playwright 测试脚本 |
 | `browser_close` | 关闭浏览器 |
 | `browser_list` | 列出浏览器实例 |
 

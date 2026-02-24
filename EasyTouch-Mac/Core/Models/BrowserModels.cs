@@ -147,6 +147,25 @@ public class BrowserWaitForRequest : Request
     public int? Timeout { get; set; }
 }
 
+// 文本断言请求（用于自动化测试）
+public class BrowserAssertTextRequest : Request
+{
+    public string BrowserId { get; set; } = string.Empty;
+    public string? Selector { get; set; }
+    public string? SelectorType { get; set; } = "css";
+    public string ExpectedText { get; set; } = string.Empty;
+    public bool ExactMatch { get; set; } = false;
+    public bool IgnoreCase { get; set; } = false;
+}
+
+// 文本断言响应
+public class BrowserAssertTextResponse
+{
+    public bool Passed { get; set; }
+    public string ExpectedText { get; set; } = string.Empty;
+    public string ActualText { get; set; } = string.Empty;
+}
+
 // 浏览器列表请求
 public class BrowserListRequest : Request
 {
@@ -323,4 +342,22 @@ public class BrowserUnrouteRequest : Request
 {
     public string BrowserId { get; set; } = string.Empty;
     public string RouteId { get; set; } = string.Empty;
+}
+
+// 执行 JS/TS 测试脚本请求（Playwright CLI）
+public class BrowserRunScriptRequest : Request
+{
+    public string ScriptPath { get; set; } = string.Empty;
+    public string BrowserType { get; set; } = "chromium"; // chromium, firefox, webkit, edge
+    public bool Headless { get; set; } = true;
+    public int? Timeout { get; set; } // ms
+    public string[]? ExtraArgs { get; set; } // 附加 playwright test 参数
+}
+
+// 执行脚本响应
+public class BrowserRunScriptResponse
+{
+    public int ExitCode { get; set; }
+    public string Command { get; set; } = string.Empty;
+    public bool Success { get; set; }
 }

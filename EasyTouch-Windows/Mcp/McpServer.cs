@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Encodings.Web;
 using EasyTouch.Core;
 using EasyTouch.Core.Models;
 using EasyTouch.Modules;
@@ -11,7 +12,8 @@ public static class McpServer
     private static readonly JsonSerializerOptions JsonOptions = new(JsonContext.Default.Options)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
     public static async Task RunAsync()
@@ -118,7 +120,7 @@ public static class McpServer
         {
             tools.AddRange(new List<object>
             {
-                new { name = "browser_launch", description = "Launch a browser instance (requires browser plugin)", inputSchema = new { type = "object", properties = new { browserType = new { type = "string", @enum = new[] { "chromium", "firefox", "webkit" } }, headless = new { type = "boolean" }, executablePath = new { type = "string" }, userDataDir = new { type = "string" } }, required = new[] { "browserType" } } },
+                new { name = "browser_launch", description = "Launch a browser instance", inputSchema = new { type = "object", properties = new { browserType = new { type = "string", @enum = new[] { "chromium", "firefox", "webkit", "edge" } }, headless = new { type = "boolean" }, executablePath = new { type = "string" }, userDataDir = new { type = "string" } }, required = new[] { "browserType" } } },
                 new { name = "browser_navigate", description = "Navigate to URL", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, url = new { type = "string" }, waitUntil = new { type = "string", @enum = new[] { "load", "domcontentloaded", "networkidle" } }, timeout = new { type = "integer" } }, required = new[] { "browserId", "url" } } },
                 new { name = "browser_click", description = "Click element", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, selector = new { type = "string" }, selectorType = new { type = "string", @enum = new[] { "css", "xpath", "text", "id" } }, button = new { type = "integer" }, clickCount = new { type = "integer" } }, required = new[] { "browserId", "selector" } } },
                 new { name = "browser_fill", description = "Fill input field", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, selector = new { type = "string" }, value = new { type = "string" }, clear = new { type = "boolean" } }, required = new[] { "browserId", "selector", "value" } } },
@@ -127,6 +129,18 @@ public static class McpServer
                 new { name = "browser_screenshot", description = "Take page screenshot", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, selector = new { type = "string" }, fullPage = new { type = "boolean" }, outputPath = new { type = "string" } }, required = new[] { "browserId" } } },
                 new { name = "browser_evaluate", description = "Execute JavaScript", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, script = new { type = "string" }, args = new { type = "array" } }, required = new[] { "browserId", "script" } } },
                 new { name = "browser_wait_for", description = "Wait for element", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, selector = new { type = "string" }, state = new { type = "string", @enum = new[] { "visible", "hidden", "attached", "detached" } }, timeout = new { type = "integer" } }, required = new[] { "browserId", "selector" } } },
+                new { name = "browser_assert_text", description = "Assert text in page or element", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, selector = new { type = "string" }, expectedText = new { type = "string" }, exactMatch = new { type = "boolean" }, ignoreCase = new { type = "boolean" } }, required = new[] { "browserId", "expectedText" } } },
+                new { name = "browser_page_info", description = "Get current page info", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" } }, required = new[] { "browserId" } } },
+                new { name = "browser_go_back", description = "Navigate back", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, timeout = new { type = "integer" } }, required = new[] { "browserId" } } },
+                new { name = "browser_go_forward", description = "Navigate forward", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, timeout = new { type = "integer" } }, required = new[] { "browserId" } } },
+                new { name = "browser_reload", description = "Reload page", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, timeout = new { type = "integer" } }, required = new[] { "browserId" } } },
+                new { name = "browser_scroll", description = "Scroll page or element", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, x = new { type = "integer" }, y = new { type = "integer" }, selector = new { type = "string" } }, required = new[] { "browserId" } } },
+                new { name = "browser_select", description = "Select option in dropdown", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, selector = new { type = "string" }, values = new { type = "array", items = new { type = "string" } } }, required = new[] { "browserId", "selector", "values" } } },
+                new { name = "browser_upload", description = "Upload files", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, selector = new { type = "string" }, files = new { type = "array", items = new { type = "string" } } }, required = new[] { "browserId", "selector", "files" } } },
+                new { name = "browser_get_cookies", description = "Get cookies", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, url = new { type = "string" } }, required = new[] { "browserId" } } },
+                new { name = "browser_set_cookie", description = "Set cookie", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, name = new { type = "string" }, value = new { type = "string" }, domain = new { type = "string" }, path = new { type = "string" } }, required = new[] { "browserId", "name", "value" } } },
+                new { name = "browser_clear_cookies", description = "Clear all cookies", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" } }, required = new[] { "browserId" } } },
+                new { name = "browser_run_script", description = "Run JS/TS Playwright test script file", inputSchema = new { type = "object", properties = new { scriptPath = new { type = "string" }, browserType = new { type = "string", @enum = new[] { "chromium", "firefox", "webkit", "edge" } }, headless = new { type = "boolean" }, timeout = new { type = "integer" }, extraArgs = new { type = "array", items = new { type = "string" } } }, required = new[] { "scriptPath" } } },
                 new { name = "browser_close", description = "Close browser", inputSchema = new { type = "object", properties = new { browserId = new { type = "string" }, force = new { type = "boolean" } }, required = new[] { "browserId" } } },
                 new { name = "browser_list", description = "List browser instances", inputSchema = new { type = "object", properties = new Dictionary<string, object>() } }
             });
@@ -172,6 +186,18 @@ public static class McpServer
             "browser_screenshot" => BrowserModule.Screenshot(ParseArgs<BrowserScreenshotRequest>(arguments)),
             "browser_evaluate" => BrowserModule.Evaluate(ParseArgs<BrowserEvaluateRequest>(arguments)),
             "browser_wait_for" => BrowserModule.WaitFor(ParseArgs<BrowserWaitForRequest>(arguments)),
+            "browser_assert_text" => BrowserModule.AssertText(ParseArgs<BrowserAssertTextRequest>(arguments)),
+            "browser_page_info" => BrowserModule.GetPageInfo(ParseArgs<BrowserGetPageInfoRequest>(arguments)),
+            "browser_go_back" => BrowserModule.GoBack(ParseArgs<BrowserGoBackRequest>(arguments)),
+            "browser_go_forward" => BrowserModule.GoForward(ParseArgs<BrowserGoForwardRequest>(arguments)),
+            "browser_reload" => BrowserModule.Reload(ParseArgs<BrowserReloadRequest>(arguments)),
+            "browser_scroll" => BrowserModule.Scroll(ParseArgs<BrowserScrollRequest>(arguments)),
+            "browser_select" => BrowserModule.Select(ParseArgs<BrowserSelectRequest>(arguments)),
+            "browser_upload" => BrowserModule.Upload(ParseArgs<BrowserUploadRequest>(arguments)),
+            "browser_get_cookies" => BrowserModule.GetCookies(ParseArgs<BrowserGetCookiesRequest>(arguments)),
+            "browser_set_cookie" => BrowserModule.SetCookie(ParseArgs<BrowserSetCookieRequest>(arguments)),
+            "browser_clear_cookies" => BrowserModule.ClearCookies(ParseArgs<BrowserClearCookiesRequest>(arguments)),
+            "browser_run_script" => BrowserModule.RunScript(ParseArgs<BrowserRunScriptRequest>(arguments)),
             "browser_close" => BrowserModule.Close(ParseArgs<BrowserCloseRequest>(arguments)),
             "browser_list" => BrowserModule.List(new BrowserListRequest()),
             "volume_set" => AudioModule.SetVolume(ParseArgs<VolumeSetRequest>(arguments)),
