@@ -80,7 +80,6 @@ Commands:
 
 ### 浏览器操作支持
 
-Windows / Linux / macOS 三端都已统一使用 `Microsoft.Playwright`（.NET），不再依赖外部 Node.js Playwright 包。  
 支持浏览器：`chromium` / `firefox` / `webkit` / `edge`（`edge` 走 Chromium 通道 `msedge`）。
 
 首次使用浏览器功能时，程序会自动尝试安装对应浏览器内核（Chromium/Firefox/WebKit），无需手动执行 `npx playwright install`。
@@ -89,36 +88,26 @@ Windows / Linux / macOS 三端都已统一使用 `Microsoft.Playwright`（.NET�
 
 ```bash
 et browser_launch --browser chromium --headless true
+et browser_launch --browser edge --headless true
 ```
 
 
 
-新增的 Web 自动化与测试能力（MCP）包括：
+### 作为 Skills 给 AI 使用
 
-- `browser_assert_text`：断言页面或元素文本（适合测试）
-- `browser_page_info`：读取页面标题、滚动位置、视口与文档尺寸
-- `browser_go_back` / `browser_go_forward` / `browser_reload`
-- `browser_scroll`：页面或元素滚动
-- `browser_select`：选择下拉项
-- `browser_upload`：文件上传
-- `browser_get_cookies` / `browser_set_cookie` / `browser_clear_cookies`
-- `browser_run_script`：执行本地 JS/TS Playwright 测试脚本文件
+只需要执行命令安装 skills 即可。
 
-`browser_run_script` 用于执行 AI 生成或手写的 Playwright 测试脚本（如 `.spec.ts` / `.spec.js`），并返回退出码。  
-常见参数：
-- `--script-path`：脚本文件路径（必填）
-- `--browser`：`chromium` / `firefox` / `webkit` / `edge`
-- `--headless`：是否无头（默认 `true`）
-- `--timeout`：测试超时（毫秒）
-- `--extra-args`：透传给 Playwright CLI 的额外参数，逗号分隔（例如 `--extra-args \"--reporter=list,--workers=1\"`）
+```bash
+npx skills add https://github.com/whuanle/EasyTouch/skills
+```
 
 
 
 ### 作为 MCP 工具使用
 
-在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异。
+如果只是给 AI 工具使用，建议使用 skills 即可，配置 MCP 可能会麻烦一些。
 
-通过 npm/bun 等方式安装的 EasyTouch，程序文件在 `C:\Users\{用户名}\AppData\Roaming\npm` 下面。
+在 Claude、Cursor 等工具中，配置 MCP 的方式都是大同小异，通过 npm/bun 等方式安装的 EasyTouch，程序文件在 `$basedir/node_modules/@whuanle/easytouch-windows` 下面，。
 
 
 
@@ -164,14 +153,6 @@ et browser_launch --browser chromium --headless true
 ```
 
 
-
-### 作为 Skills 给 AI 使用
-
-只需要执行命令安装 skills 即可。
-
-```bash
-npx skills add https://github.com/whuanle/EasyTouch/skills
-```
 
 
 
@@ -302,7 +283,7 @@ et clipboard_get_files
 
 
 
-使用 `et browser_launch --browser` 命令启动浏览器后（匿名模式），使用 `et browser_list` 获取浏览器实例列表，之后可以使用不同的命令控制浏览器，最后可以自行关闭或使用 `et browser_close` 关闭浏览器。
+使用 `et browser_launch --browser` 命令启动浏览器后（匿名模式），使用 `et browser_list` 获取浏览器实例列表，之后可以使用不同的命令控制浏览器，最后可以自行关闭或使用 `et browser_close` 关闭浏览器。
 
 
 
