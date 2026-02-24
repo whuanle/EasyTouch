@@ -98,7 +98,7 @@ et browser_launch --browser edge --headless true
 只需要执行命令安装 skills 即可。
 
 ```bash
-npx skills add https://github.com/whuanle/EasyTouch/skills
+npx skills add https://github.com/whuanle/EasyTouch
 ```
 
 
