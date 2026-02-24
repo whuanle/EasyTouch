@@ -82,13 +82,13 @@ Commands:
 
 支持浏览器：`chromium` / `firefox` / `webkit` / `edge`（`edge` 走 Chromium 通道 `msedge`）。
 
-首次使用浏览器功能时，程序会自动尝试安装对应浏览器内核（Chromium/Firefox/WebKit），无需手动执行 `npx playwright install`。
-
-如果你希望提前安装，可以直接执行一次浏览器命令触发安装：
+浏览器操作建议按会话流程执行：先启动，再获取 `browserId`，后续所有命令都使用该 `browserId`。
 
 ```bash
-et browser_launch --browser chromium --headless true
-et browser_launch --browser edge --headless true
+et browser_launch --browser edge --headless false
+et browser_list
+# 使用 browserId 执行后续命令
+et browser_navigate --browser-id browser_1 --url "https://example.com"
 ```
 
 

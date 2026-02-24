@@ -115,14 +115,42 @@ EasyTouch 作为 MCP 服务器，为 AI 助手提供跨平台的桌面自动化�
 | `clipboard_clear` | 清空 | - |
 | `clipboard_get_files` | 获取文件列表 | - |
 
-### 音频控制
+### 浏览器自动化
+
+EasyTouch 支持通过 Playwright 进行浏览器自动化。
 
 | Tool | 功能 | 关键参数 |
 |------|------|----------|
-| `volume_get` | 获取音量 | - |
-| `volume_set` | 设置音量 | `level` (0-100) |
-| `volume_mute` | 静音/取消静音 | `state` (true/false) |
-| `audio_devices` | 列出音频设备 | - |
+| `browser_launch` | 启动浏览器会话 | `browser`, `headless`, `executable`, `user-data-dir` |
+| `browser_list` | 列出浏览器会话 | - |
+| `browser_navigate` | 导航页面 | `browser-id`, `url`, `wait-until`, `timeout` |
+| `browser_click` | 点击元素 | `browser-id`, `selector`, `selector-type` |
+| `browser_fill` | 输入文本 | `browser-id`, `selector`, `value` |
+| `browser_wait_for` | 等待元素状态 | `browser-id`, `selector`, `state`, `timeout` |
+| `browser_screenshot` | 页面截图 | `browser-id`, `output`, `full-page` |
+| `browser_evaluate` | 执行 JavaScript | `browser-id`, `script` |
+| `browser_close` | 关闭浏览器会话 | `browser-id`, `force` |
+
+浏览器会话建议流程：
+1. 先执行 `browser_launch`
+2. 用 `browser_list` 获取 `browserId`
+3. 所有后续浏览器命令都使用该 `browserId`
+4. 任务结束后执行 `browser_close`
+
+说明：通过 npm 安装 EasyTouch 时已内置 Playwright 运行能力，无需额外安装步骤。
+
+MCP 参数映射（常用）：
+- `browser_launch`: `browserType`, `headless`, `executablePath`, `userDataDir`
+- `browser_navigate`: `browserId`, `url`, `waitUntil`, `timeout`
+- `browser_click`: `browserId`, `selector`, `selectorType`, `button`, `clickCount`
+- `browser_fill`: `browserId`, `selector`, `selectorType`, `value`, `clear`
+- `browser_wait_for`: `browserId`, `selector`, `selectorType`, `state`, `timeout`
+- `browser_screenshot`: `browserId`, `selector`, `fullPage`, `outputPath`
+
+操作建议：
+1. 每次点击/输入前先 `browser_wait_for`
+2. 优先使用稳定选择器（`data-testid` / `name`）
+3. 失败时先 `browser_page_info` 再决定是否重建会话
 
 ## 使用场景
 
@@ -198,7 +226,6 @@ AI 执行：
 | 键盘控制 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
 | 截图 | ✅ 完整 | ✅ 完整 | ✅ 完整 |
 | 窗口管理 | ✅ 完整 | ⚠️ 部分 | ⚠️ 部分 |
-| 音频控制 | ✅ 完整 | ⚠️ 部分 | ⚠️ 部分 |
 
 **Linux 限制**:
 - 需要 X11，不支持 Wayland
@@ -208,30 +235,7 @@ AI 执行：
 - 需要辅助功能权限
 - 截图需要屏幕录制权限
 
-## 浏览器自动化（可选）
-
-EasyTouch 支持通过 Playwright 进行浏览器自动化。
-
-安装 Playwright：
-
-```bash
-npm install -g playwright
-npx playwright install chromium
-```
-
-可用的浏览器工具：
-- `browser_launch` - 启动浏览器
-- `browser_navigate` - 导航到 URL
-- `browser_click` - 点击元素
-- `browser_fill` - 填充输入框
-- `browser_screenshot` - 页面截图
-- `browser_evaluate` - 执行 JavaScript
-- 更多...
-
-详细设置见 [BROWSER_SETUP.md](BROWSER_SETUP.md)
-
 ## 相关文档
 
 - [MCP 测试指南](../docs/MCP_TEST_GUIDE.md) - 完整的 MCP 功能测试指南
-- [浏览器自动化设置](BROWSER_SETUP.md) - Playwright 安装和配置
 - [项目 README](../README.md) - 项目总览和 CLI 使用说明
