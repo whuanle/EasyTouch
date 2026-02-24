@@ -325,19 +325,25 @@ dotnet publish EasyTouch-Windows -c Release -r win-x64 --self-contained
 ### Linux 测试失败
 
 常见原因：
-1. **缺少 X11**: 需要安装 Xvfb 或实际显示器
+1. **环境不在官方验证范围**: 当前 Linux 仅以 Ubuntu Desktop（22.04/24.04）为验证基线，其他发行版/桌面环境为 best-effort。
+
+2. **缺少自动化依赖库**（Ubuntu）：
    ```bash
-   sudo apt-get install xvfb
+   # 基础依赖（推荐）
+   sudo apt install xdotool xclip xsel imagemagick gnome-screenshot
+
+   # Wayland 补充依赖（按需）
+   sudo apt install ydotool wl-clipboard grim
+   ```
+
+3. **无图形显示或 DISPLAY 不可用**（CI/远程会话）：
+   ```bash
+   sudo apt install xvfb
    export DISPLAY=:99
    Xvfb :99 -screen 0 1920x1080x24 &
    ```
 
-2. **缺少剪贴板工具**: 安装 xclip 或 xsel
-   ```bash
-   sudo apt-get install xclip
-   ```
-
-3. **权限问题**: 某些功能需要加入 input 组
+4. **权限问题**: 某些功能需要加入 `input` 组
    ```bash
    sudo usermod -a -G input $USER
    # 重新登录

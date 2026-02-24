@@ -418,9 +418,26 @@ et browser_close --browser-id <id>
 - 部分功能可能需要管理员权限
 
 ### Linux
-- 需要 X11 显示服务器
-- 不支持 Wayland
-- 建议在图形界面环境中使用
+- 官方验证环境：Ubuntu Desktop（22.04 / 24.04）
+- 其他发行版和桌面环境为 best-effort，建议先用测试脚本验证
+- 建议在图形界面环境中使用（优先 X11 会话）
+- 有些功能可能需要 sudo 管理员权限
+
+Linux 依赖可手动安装（Ubuntu）：
+
+```bash
+# 基础依赖（推荐）
+sudo apt install xdotool xclip xsel imagemagick gnome-screenshot
+
+# Wayland 补充依赖（按需）
+sudo apt install ydotool wl-clipboard grim
+```
+
+安装后可执行脚本测试兼容性：
+
+```bash
+node scripts/test-easytouch.js --cli-only --verbose
+```
 
 ### macOS
 - 需要授予辅助功能权限（系统设置 → 隐私与安全性 → 辅助功能）

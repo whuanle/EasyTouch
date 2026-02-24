@@ -207,6 +207,23 @@ public class CpuInfoResponse
     public double Usage { get; set; }
 }
 
+public class UptimeInfoResponse
+{
+    public double Seconds { get; set; }
+    public long Milliseconds { get; set; }
+    public string HumanReadable { get; set; } = string.Empty;
+}
+
+public class BatteryInfoResponse
+{
+    public bool Present { get; set; }
+    public int Percentage { get; set; }
+    public string Status { get; set; } = "Unknown";
+    public bool IsCharging { get; set; }
+    public int? TimeToEmptyMinutes { get; set; }
+    public int? TimeToFullMinutes { get; set; }
+}
+
 public class MemoryInfoResponse
 {
     public long Total { get; set; }

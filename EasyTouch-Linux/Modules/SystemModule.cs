@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using EasyTouch.Core.Models;
 
 namespace EasyTouch.Modules;
@@ -56,15 +57,8 @@ public static class SystemModule
                     cpuName = modelMatch.Groups[1].Value.Trim();
                 }
             }
-            
-            // Get CPU usage using top
-            var output = RunCommand("top", "-bn1 | grep \"Cpu(s)\"");
-            double usage = 0;
-            var usageMatch = System.Text.RegularExpressions.Regex.Match(output, @"([\d.]+)\s*%us");
-            if (usageMatch.Success && double.TryParse(usageMatch.Groups[1].Value, out var us))
-            {
-                usage = us;
-            }
+
+            var usage = GetCpuUsagePercentage();
             
             return new SuccessResponse<CpuInfoResponse>(new CpuInfoResponse
             {
@@ -77,6 +71,112 @@ public static class SystemModule
         catch (Exception ex)
         {
             return new ErrorResponse($"Get CPU info failed: {ex.Message}");
+        }
+    }
+
+    public static Response GetUptime()
+    {
+        try
+        {
+            if (!File.Exists("/proc/uptime"))
+            {
+                return new ErrorResponse("Cannot read uptime info");
+            }
+
+            var uptimeContent = File.ReadAllText("/proc/uptime").Trim();
+            var parts = uptimeContent.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0 || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
+            {
+                return new ErrorResponse("Failed to parse uptime info");
+            }
+
+            return new SuccessResponse<UptimeInfoResponse>(new UptimeInfoResponse
+            {
+                Seconds = seconds,
+                Milliseconds = (long)(seconds * 1000),
+                HumanReadable = FormatDuration(TimeSpan.FromSeconds(seconds))
+            });
+        }
+        catch (Exception ex)
+        {
+            return new ErrorResponse($"Get uptime failed: {ex.Message}");
+        }
+    }
+
+    public static Response GetBatteryInfo()
+    {
+        try
+        {
+            const string powerSupplyPath = "/sys/class/power_supply";
+            if (!Directory.Exists(powerSupplyPath))
+            {
+                return new SuccessResponse<BatteryInfoResponse>(new BatteryInfoResponse
+                {
+                    Present = false,
+                    Percentage = 0,
+                    Status = "NotPresent",
+                    IsCharging = false
+                });
+            }
+
+            var batteryDir = Directory.GetDirectories(powerSupplyPath)
+                .FirstOrDefault(dir =>
+                {
+                    var typeFile = Path.Combine(dir, "type");
+                    return File.Exists(typeFile) &&
+                           File.ReadAllText(typeFile).Trim().Equals("Battery", StringComparison.OrdinalIgnoreCase);
+                });
+
+            if (string.IsNullOrEmpty(batteryDir))
+            {
+                return new SuccessResponse<BatteryInfoResponse>(new BatteryInfoResponse
+                {
+                    Present = false,
+                    Percentage = 0,
+                    Status = "NotPresent",
+                    IsCharging = false
+                });
+            }
+
+            var capacity = TryReadIntFile(Path.Combine(batteryDir, "capacity"));
+            var status = (TryReadStringFile(Path.Combine(batteryDir, "status")) ?? "Unknown").Trim();
+            var isCharging = status.Equals("Charging", StringComparison.OrdinalIgnoreCase);
+
+            var energyNow = TryReadDoubleFile(Path.Combine(batteryDir, "energy_now")) ??
+                            TryReadDoubleFile(Path.Combine(batteryDir, "charge_now"));
+            var energyFull = TryReadDoubleFile(Path.Combine(batteryDir, "energy_full")) ??
+                             TryReadDoubleFile(Path.Combine(batteryDir, "charge_full"));
+            var powerNow = TryReadDoubleFile(Path.Combine(batteryDir, "power_now")) ??
+                           TryReadDoubleFile(Path.Combine(batteryDir, "current_now"));
+
+            int? timeToEmptyMinutes = null;
+            int? timeToFullMinutes = null;
+
+            if (powerNow.HasValue && powerNow.Value > 0)
+            {
+                if (isCharging && energyNow.HasValue && energyFull.HasValue && energyFull.Value > energyNow.Value)
+                {
+                    timeToFullMinutes = (int)Math.Round((energyFull.Value - energyNow.Value) / powerNow.Value * 60);
+                }
+                else if (!isCharging && energyNow.HasValue)
+                {
+                    timeToEmptyMinutes = (int)Math.Round(energyNow.Value / powerNow.Value * 60);
+                }
+            }
+
+            return new SuccessResponse<BatteryInfoResponse>(new BatteryInfoResponse
+            {
+                Present = true,
+                Percentage = capacity ?? 0,
+                Status = status,
+                IsCharging = isCharging,
+                TimeToEmptyMinutes = timeToEmptyMinutes,
+                TimeToFullMinutes = timeToFullMinutes
+            });
+        }
+        catch (Exception ex)
+        {
+            return new ErrorResponse($"Get battery info failed: {ex.Message}");
         }
     }
 
@@ -285,6 +385,98 @@ public static class SystemModule
         }
         
         return 0;
+    }
+
+    private static double GetCpuUsagePercentage()
+    {
+        var first = ReadCpuTimes();
+        Thread.Sleep(120);
+        var second = ReadCpuTimes();
+
+        var totalDiff = second.Total - first.Total;
+        var idleDiff = second.Idle - first.Idle;
+
+        if (totalDiff <= 0)
+            return 0;
+
+        return Math.Clamp((totalDiff - idleDiff) * 100.0 / totalDiff, 0, 100);
+    }
+
+    private static (long Idle, long Total) ReadCpuTimes()
+    {
+        if (!File.Exists("/proc/stat"))
+            throw new InvalidOperationException("Cannot read /proc/stat");
+
+        var firstLine = File.ReadLines("/proc/stat").FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(firstLine) || !firstLine.StartsWith("cpu "))
+            throw new InvalidOperationException("Invalid /proc/stat format");
+
+        var values = firstLine
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Skip(1)
+            .Select(v => long.TryParse(v, out var parsed) ? parsed : 0)
+            .ToArray();
+
+        if (values.Length < 4)
+            throw new InvalidOperationException("Invalid CPU time fields");
+
+        var idle = values[3] + (values.Length > 4 ? values[4] : 0); // idle + iowait
+        var total = values.Sum();
+        return (idle, total);
+    }
+
+    private static int? TryReadIntFile(string path)
+    {
+        var text = TryReadStringFile(path);
+        if (text != null && int.TryParse(text.Trim(), out var value))
+        {
+            return value;
+        }
+
+        return null;
+    }
+
+    private static double? TryReadDoubleFile(string path)
+    {
+        var text = TryReadStringFile(path);
+        if (text != null && double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        {
+            return value;
+        }
+
+        return null;
+    }
+
+    private static string? TryReadStringFile(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalDays >= 1)
+        {
+            return $"{(int)duration.TotalDays}d {duration.Hours}h {duration.Minutes}m";
+        }
+
+        if (duration.TotalHours >= 1)
+        {
+            return $"{duration.Hours}h {duration.Minutes}m {duration.Seconds}s";
+        }
+
+        if (duration.TotalMinutes >= 1)
+        {
+            return $"{duration.Minutes}m {duration.Seconds}s";
+        }
+
+        return $"{duration.Seconds}s";
     }
 
     private static bool CommandExists(string command)

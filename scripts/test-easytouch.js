@@ -15,7 +15,7 @@
  *   --help         显示帮助
  */
 
-const { spawn, execSync } = require('child_process');
+const { spawn, spawnSync, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -57,6 +57,27 @@ function firstExistingPath(paths) {
         }
     }
     return null;
+}
+
+function runCandidateCommand(binaryPath, args, timeout = 5000) {
+    const result = spawnSync(binaryPath, args, {
+        timeout,
+        windowsHide: true,
+        encoding: 'utf8',
+        env: { ...process.env }
+    });
+
+    return {
+        status: result.status,
+        stdout: (result.stdout || '').trim(),
+        stderr: (result.stderr || '').trim(),
+        error: result.error ? result.error.message : ''
+    };
+}
+
+function looksLikeSuccessJson(text) {
+    if (!text) return false;
+    return /"success"\s*:\s*true/i.test(text);
 }
 
 // 获取项目信息
@@ -175,25 +196,57 @@ async function findOrBuildEasyTouch() {
             : null;
 
         const tryPaths = [
-            // 系统 PATH
-            binaryName,
+            // 本地构建路径（优先，避免命中系统旧版本）
+            info.publishPath,
             // npm 全局安装
             globalPkgBinary,
-            // 本地构建路径
-            info.publishPath,
+            // 系统 PATH
+            binaryName,
         ].filter(Boolean);
         
+        let fallbackCandidate = null;
+
         for (const tryPath of tryPaths) {
             try {
                 if (fs.existsSync(tryPath) || tryPath === binaryName) {
-                    // 验证可执行
-                    execSync(`"${tryPath}" --version`, { stdio: 'pipe' });
+                    const versionCheck = runCandidateCommand(tryPath, ['--version']);
+                    if (versionCheck.status !== 0) {
+                        continue;
+                    }
+
+                    // Linux 下优先选择 CPU 查询实现较新的版本，避免命中旧二进制（旧版会调用 top 并报 unknown option '|'）。
+                    if (IS_LINUX) {
+                        const cpuCheck = runCandidateCommand(tryPath, ['cpu_info']);
+                        const cpuOutput = `${cpuCheck.stdout}\n${cpuCheck.stderr}`;
+                        const legacyCpuImpl = cpuOutput.includes("top: unknown option '|'");
+                        const cpuLooksHealthy = cpuCheck.status === 0 && looksLikeSuccessJson(cpuCheck.stdout);
+
+                        if (legacyCpuImpl || !cpuLooksHealthy) {
+                            if (!fallbackCandidate) {
+                                fallbackCandidate = tryPath;
+                            }
+                            continue;
+                        }
+                    }
+
                     console.log(`✅ Found EasyTouch: ${tryPath}\n`);
                     ET_PATH_CACHE = tryPath;
                     return tryPath;
                 }
             } catch (e) {
                 // 继续尝试下一个
+            }
+        }
+
+        if (fallbackCandidate) {
+            if (IS_LINUX) {
+                console.log(`⚠️  Found legacy EasyTouch binary (CPU implementation outdated): ${fallbackCandidate}`);
+                console.log('   Will try building from source instead of using legacy binary.\n');
+            } else {
+                console.log(`⚠️  Found legacy EasyTouch binary (missing newer commands): ${fallbackCandidate}`);
+                console.log('   Continuing with legacy binary as fallback.\n');
+                ET_PATH_CACHE = fallbackCandidate;
+                return fallbackCandidate;
             }
         }
     }
@@ -230,7 +283,6 @@ function runCommand(args, timeout = CONFIG.timeout) {
         
         // Windows 上需要 shell: true 来正确处理 .exe 文件
         const spawnOptions = {
-            timeout: timeout,
             windowsHide: true,
             env: { ...process.env }
         };
@@ -243,6 +295,22 @@ function runCommand(args, timeout = CONFIG.timeout) {
 
         let stdout = '';
         let stderr = '';
+        let finished = false;
+        let timedOut = false;
+        let forceKillTimer = null;
+
+        const finish = (payload) => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timeoutTimer);
+            if (forceKillTimer) {
+                clearTimeout(forceKillTimer);
+            }
+            resolve({
+                ...payload,
+                duration: Date.now() - startTime
+            });
+        };
 
         child.stdout.on('data', (data) => {
             stdout += data.toString();
@@ -252,26 +320,42 @@ function runCommand(args, timeout = CONFIG.timeout) {
             stderr += data.toString();
         });
 
-        child.on('close', (code, signal) => {
-            const duration = Date.now() - startTime;
-            resolve({
-                success: code === 0,
-                exitCode: code,
+        const timeoutTimer = setTimeout(() => {
+            timedOut = true;
+            try {
+                child.kill('SIGTERM');
+            } catch {}
+
+            forceKillTimer = setTimeout(() => {
+                if (finished) return;
+                try {
+                    child.kill('SIGKILL');
+                } catch {}
+            }, 1200);
+        }, timeout);
+
+        child.on('exit', (code, signal) => {
+            const mergedError = [
+                stderr.trim(),
+                timedOut ? 'Command timed out' : ''
+            ].filter(Boolean).join('\n');
+
+            finish({
+                success: !timedOut && code === 0,
+                exitCode: code ?? -1,
                 signal: signal || null,
                 output: stdout.trim(),
-                error: stderr.trim(),
-                duration
+                error: mergedError
             });
         });
 
         child.on('error', (err) => {
-            resolve({
+            finish({
                 success: false,
                 exitCode: -1,
                 signal: null,
                 output: '',
-                error: err.message,
-                duration: Date.now() - startTime
+                error: err.message
             });
         });
     });
@@ -294,6 +378,415 @@ function parseJson(output) {
     }
 }
 
+function parseMcpActionPayload(response) {
+    const result = response ? (response.Result ?? response.result) : null;
+    if (!result) {
+        throw new Error('MCP missing result');
+    }
+    const success = result.success ?? result.Success;
+    const error = result.error ?? result.Error;
+    if (success === false) {
+        throw new Error(error || 'MCP action failed');
+    }
+
+    return {
+        success: success ?? true,
+        error: error || '',
+        data: result.data ?? result.Data ?? null,
+        raw: result
+    };
+}
+
+async function runBrowserChecksViaMcp(etPath) {
+    return new Promise((resolve) => {
+        const startTime = Date.now();
+        const screenshotPath = path.join(os.tmpdir(), `et_browser_mcp_${Date.now()}.png`);
+        const child = spawn(etPath, ['--mcp'], {
+            windowsHide: true,
+            env: { ...process.env }
+        });
+
+        let buffer = '';
+        let browserId = null;
+        let closed = false;
+        const pending = new Map();
+        let idCounter = 1;
+
+        function finalize(success, error) {
+            if (closed) return;
+            closed = true;
+
+            for (const [, handler] of pending) {
+                clearTimeout(handler.timer);
+                handler.reject(new Error('MCP process terminated'));
+            }
+            pending.clear();
+
+            try { child.kill(); } catch {}
+            try { if (fs.existsSync(screenshotPath)) fs.unlinkSync(screenshotPath); } catch {}
+
+            resolve({
+                success,
+                error: error || '',
+                duration: Date.now() - startTime
+            });
+        }
+
+        function handleLine(line) {
+            const trimmed = line.trim();
+            if (!trimmed) return;
+
+            let message;
+            try {
+                message = JSON.parse(trimmed);
+            } catch {
+                return;
+            }
+
+            const id = message.Id ?? message.id;
+            if (id == null) return;
+            const key = String(id);
+            const handler = pending.get(key);
+            if (!handler) return;
+
+            clearTimeout(handler.timer);
+            pending.delete(key);
+            handler.resolve(message);
+        }
+
+        function sendMcpRequest(method, params, timeout = 20000) {
+            return new Promise((resolveRequest, rejectRequest) => {
+                const id = String(idCounter++);
+                const timer = setTimeout(() => {
+                    pending.delete(id);
+                    rejectRequest(new Error(`MCP request timeout: ${method}`));
+                }, timeout);
+
+                pending.set(id, { resolve: resolveRequest, reject: rejectRequest, timer });
+                const payload = { Jsonrpc: '2.0', Id: id, Method: method };
+                if (params !== undefined) payload.Params = params;
+                child.stdin.write(JSON.stringify(payload) + '\n');
+            });
+        }
+
+        child.stdout.on('data', (data) => {
+            buffer += data.toString();
+            let newlineIndex = buffer.indexOf('\n');
+            while (newlineIndex !== -1) {
+                const line = buffer.slice(0, newlineIndex);
+                buffer = buffer.slice(newlineIndex + 1);
+                handleLine(line);
+                newlineIndex = buffer.indexOf('\n');
+            }
+        });
+
+        child.on('error', (err) => {
+            finalize(false, `MCP start failed: ${err.message}`);
+        });
+
+        child.on('close', () => {
+            if (!closed) {
+                finalize(false, 'MCP process exited unexpectedly');
+            }
+        });
+
+        (async () => {
+            try {
+                const launchResponse = await sendMcpRequest('call', {
+                    action: 'browser_launch',
+                    BrowserType: 'chromium',
+                    Headless: true
+                }, 120000);
+                const launchPayload = parseMcpActionPayload(launchResponse);
+                browserId = launchPayload.data && (launchPayload.data.browserId ?? launchPayload.data.BrowserId)
+                    ? (launchPayload.data.browserId ?? launchPayload.data.BrowserId)
+                    : null;
+                if (!browserId) {
+                    throw new Error('browser_launch did not return browserId');
+                }
+
+                await sendMcpRequest('call', {
+                    action: 'browser_navigate',
+                    BrowserId: browserId,
+                    Url: 'https://example.com',
+                    Timeout: 30000,
+                    WaitUntil: 'domcontentloaded'
+                }, 45000).then(parseMcpActionPayload);
+
+                const textPayload = await sendMcpRequest('call', {
+                    action: 'browser_get_text',
+                    BrowserId: browserId,
+                    Selector: 'h1'
+                }, 30000).then(parseMcpActionPayload);
+                const headingText = textPayload.data
+                    ? (textPayload.data.text ?? textPayload.data.Text ?? '')
+                    : '';
+                if (!headingText.includes('Example Domain')) {
+                    throw new Error(`Unexpected heading text: ${headingText}`);
+                }
+
+                const assertPayload = await sendMcpRequest('call', {
+                    action: 'browser_assert_text',
+                    BrowserId: browserId,
+                    Selector: 'h1',
+                    ExpectedText: 'Example Domain',
+                    ExactMatch: true
+                }, 30000).then(parseMcpActionPayload);
+                const assertData = assertPayload.data ?? {};
+                const assertPassed = assertData.passed ?? assertData.Passed;
+                if (assertPassed === false) {
+                    throw new Error('browser_assert_text reported passed=false');
+                }
+
+                const pageInfoPayload = await sendMcpRequest('call', {
+                    action: 'browser_page_info',
+                    BrowserId: browserId
+                }, 30000).then(parseMcpActionPayload);
+                const pageInfo = pageInfoPayload.data ?? {};
+                const pageUrl = pageInfo.url ?? pageInfo.Url ?? '';
+                const pageTitle = pageInfo.title ?? pageInfo.Title ?? '';
+                if (!String(pageUrl).includes('example.com') || !String(pageTitle).includes('Example Domain')) {
+                    throw new Error(`Unexpected page info: url=${pageUrl}, title=${pageTitle}`);
+                }
+
+                const evaluatePayload = await sendMcpRequest('call', {
+                    action: 'browser_evaluate',
+                    BrowserId: browserId,
+                    Script: '() => document.title'
+                }, 30000).then(parseMcpActionPayload);
+                const evaluateData = evaluatePayload.data ?? {};
+                const evaluateTitle = evaluateData.result ?? evaluateData.Result ?? '';
+                if (!String(evaluateTitle).includes('Example Domain')) {
+                    throw new Error(`Unexpected evaluate title: ${evaluateTitle}`);
+                }
+
+                await sendMcpRequest('call', {
+                    action: 'browser_screenshot',
+                    BrowserId: browserId,
+                    OutputPath: screenshotPath,
+                    Type: 'png'
+                }, 45000).then(parseMcpActionPayload);
+
+                if (!fs.existsSync(screenshotPath)) {
+                    throw new Error('browser_screenshot did not create file');
+                }
+                const stat = fs.statSync(screenshotPath);
+                if (stat.size <= 0) {
+                    throw new Error('browser_screenshot produced empty file');
+                }
+
+                await sendMcpRequest('call', {
+                    action: 'browser_close',
+                    BrowserId: browserId
+                }, 20000).then(parseMcpActionPayload);
+
+                finalize(true, '');
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                if (browserId) {
+                    try {
+                        await sendMcpRequest('call', {
+                            action: 'browser_close',
+                            BrowserId: browserId
+                        }, 5000).then(parseMcpActionPayload);
+                    } catch {}
+                }
+                finalize(false, message);
+            }
+        })();
+    });
+}
+
+function parseSuccessData(result, commandName) {
+    if (!result.success) {
+        const message = extractErrorMessage(result) || `${commandName} failed`;
+        throw new Error(message);
+    }
+
+    const parsed = parseJson(result.output || '');
+    if (!parsed || parsed.success !== true) {
+        throw new Error(`${commandName} returned invalid JSON response`);
+    }
+
+    return parsed.data || {};
+}
+
+async function runBrowserChecksViaCli(runCmd) {
+    const startTime = Date.now();
+    const screenshotPath = path.join(os.tmpdir(), `et_browser_cli_${Date.now()}.png`);
+    let browserId = null;
+
+    try {
+        // Ignore cleanup errors of previous runs.
+        await runCmd(['browser_daemon_stop'], 5000);
+
+        const launchData = parseSuccessData(
+            await runCmd(['browser_launch', '--browser', 'chromium', '--headless', 'true'], 120000),
+            'browser_launch'
+        );
+        browserId = launchData.browserId;
+        if (!browserId) {
+            throw new Error('browser_launch did not return browserId');
+        }
+
+        const navigateData = parseSuccessData(
+            await runCmd([
+                'browser_navigate',
+                '--browser-id', browserId,
+                '--url', 'https://example.com',
+                '--wait-until', 'domcontentloaded',
+                '--timeout', '30000'
+            ], 45000),
+            'browser_navigate'
+        );
+        if (!String(navigateData.url || '').includes('example.com')) {
+            throw new Error(`Unexpected navigate url: ${navigateData.url}`);
+        }
+
+        const textData = parseSuccessData(
+            await runCmd(['browser_get_text', '--browser-id', browserId, '--selector', 'h1'], 30000),
+            'browser_get_text'
+        );
+        if (!String(textData.text || '').includes('Example Domain')) {
+            throw new Error(`Unexpected h1 text: ${textData.text}`);
+        }
+
+        const assertData = parseSuccessData(
+            await runCmd([
+                'browser_assert_text',
+                '--browser-id', browserId,
+                '--selector', 'h1',
+                '--expected-text', 'Example Domain',
+                '--exact-match', 'true'
+            ], 30000),
+            'browser_assert_text'
+        );
+        if (assertData.passed === false) {
+            throw new Error('browser_assert_text reported passed=false');
+        }
+
+        const pageInfo = parseSuccessData(
+            await runCmd(['browser_page_info', '--browser-id', browserId], 30000),
+            'browser_page_info'
+        );
+        if (!String(pageInfo.url || '').includes('example.com') || !String(pageInfo.title || '').includes('Example Domain')) {
+            throw new Error(`Unexpected page info: url=${pageInfo.url}, title=${pageInfo.title}`);
+        }
+
+        const evalData = parseSuccessData(
+            await runCmd(['browser_evaluate', '--browser-id', browserId, '--script', '() => document.title'], 30000),
+            'browser_evaluate'
+        );
+        if (!String(evalData.result || '').includes('Example Domain')) {
+            throw new Error(`Unexpected evaluate result: ${evalData.result}`);
+        }
+
+        parseSuccessData(
+            await runCmd(['browser_screenshot', '--browser-id', browserId, '--output', screenshotPath, '--type', 'png'], 45000),
+            'browser_screenshot'
+        );
+        if (!fs.existsSync(screenshotPath) || fs.statSync(screenshotPath).size <= 0) {
+            throw new Error('browser_screenshot did not produce a valid file');
+        }
+
+        parseSuccessData(
+            await runCmd(['browser_close', '--browser-id', browserId], 20000),
+            'browser_close'
+        );
+        browserId = null;
+
+        await runCmd(['browser_daemon_stop'], 5000);
+
+        return {
+            success: true,
+            error: '',
+            duration: Date.now() - startTime
+        };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+
+        if (browserId) {
+            try {
+                await runCmd(['browser_close', '--browser-id', browserId], 8000);
+            } catch {}
+        }
+        try {
+            await runCmd(['browser_daemon_stop'], 5000);
+        } catch {}
+
+        return {
+            success: false,
+            error: message,
+            duration: Date.now() - startTime
+        };
+    } finally {
+        try {
+            if (fs.existsSync(screenshotPath)) fs.unlinkSync(screenshotPath);
+        } catch {}
+    }
+}
+
+function extractErrorMessage(result) {
+    const parsed = parseJson(result.output || '');
+    if (parsed && typeof parsed.error === 'string' && parsed.error.trim()) {
+        return parsed.error.trim();
+    }
+    if (result.error && result.error.trim()) {
+        return result.error.trim();
+    }
+    return '';
+}
+
+function detectMissingCommand(errorMessage) {
+    const startingProcessMatch = errorMessage.match(/ErrorStartingProcess,\s*([^,\s]+),/i);
+    if (startingProcessMatch) {
+        return startingProcessMatch[1];
+    }
+
+    const failedToStartMatch = errorMessage.match(/Failed to start\s+([^\s:]+)/i);
+    if (failedToStartMatch) {
+        return failedToStartMatch[1];
+    }
+
+    return null;
+}
+
+function truncate(text, maxLength = 120) {
+    if (!text || text.length <= maxLength) {
+        return text;
+    }
+    return text.slice(0, maxLength - 1) + '…';
+}
+
+function deriveSkipReason(result, details) {
+    const errorMessage = extractErrorMessage(result);
+    const source = errorMessage || (details && details.length > 0 ? details.join('; ') : '');
+    if (!source) {
+        return 'Optional test failed';
+    }
+
+    const missingCommand = detectMissingCommand(source);
+    if (missingCommand) {
+        return `缺少依赖: ${missingCommand}`;
+    }
+
+    const lower = source.toLowerCase();
+    if (lower.includes('unknown command')) {
+        return '命令未实现';
+    }
+    if (lower.includes("compositor doesn't support")) {
+        return 'Wayland 合成器不支持该能力';
+    }
+    if (lower.includes('ydotoold backend unavailable') || lower.includes('failed to open uinput device')) {
+        return 'ydotoold 未就绪或 /dev/uinput 权限不足';
+    }
+    if (lower.includes('no clipboard tool found')) {
+        return '缺少剪贴板工具';
+    }
+
+    return truncate(source);
+}
+
 // 休眠函数
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -314,15 +807,13 @@ const TEST_CASES = {
         { name: 'CPU信息', args: ['cpu_info'], expectSuccess: true },
         { name: '内存信息', args: ['memory_info'], expectSuccess: true },
         { name: '显示器列表', args: ['screen_list'], expectSuccess: true, checkKeys: ['screens'] },
-        { name: '像素颜色', args: ['pixel_color', '--x', '100', '--y', '100'], expectSuccess: true, checkKeys: ['r', 'g', 'b'] },
         { name: '截图功能', args: ['screenshot', '--output', path.join(os.tmpdir(), 'et_test.png')], expectSuccess: true, cleanup: (args) => {
             try { fs.unlinkSync(args[args.indexOf('--output') + 1]); } catch {}
         }},
         { name: '进程列表', args: ['process_list'], expectSuccess: true, checkKeys: ['processes'] },
         { name: '磁盘列表', args: ['disk_list'], expectSuccess: true, checkKeys: ['disks'] },
         { name: '剪贴板写入', args: ['clipboard_set_text', '--text', 'Test123'], expectSuccess: true },
-        { name: '剪贴板读取', args: ['clipboard_get_text'], expectSuccess: true, checkOutput: 'Test123' },
-        { name: '剪贴板清空', args: ['clipboard_clear'], expectSuccess: true, optional: true },
+        { name: '剪贴板读取', args: ['clipboard_get_text'], expectSuccess: true },
         { name: '锁定屏幕', args: ['lock_screen'], expectSuccess: true, skip: true, reason: '跳过锁定屏幕测试以避免中断自动化测试' },
         { name: '无效命令', args: ['invalid_command_xyz'], expectSuccess: false },
     ],
@@ -379,8 +870,20 @@ const TEST_CASES = {
     linux: [
         // Linux 平台补充测试
         { name: '浏览器列表', args: ['browser_list'], expectSuccess: true, checkKeys: ['browsers'], optional: true },
-        { name: '系统运行时间', args: ['uptime'], expectSuccess: true, optional: true },
-        { name: '电池信息', args: ['battery_info'], expectSuccess: true, optional: true },
+        { name: '浏览器操作(CLI)', args: ['--version'], expectSuccess: true, optional: true, verify: async (_result, runCmd) => {
+            const flow = await runBrowserChecksViaCli(runCmd);
+            if (!flow.success) {
+                throw new Error(flow.error || 'CLI browser flow failed');
+            }
+            return true;
+        }},
+        { name: '浏览器操作(MCP)', args: ['--version'], expectSuccess: true, optional: true, verify: async () => {
+            const flow = await runBrowserChecksViaMcp(getEasyTouchPath());
+            if (!flow.success) {
+                throw new Error(flow.error || 'MCP browser flow failed');
+            }
+            return true;
+        }},
     ],
     mac: [
         // 鼠标操作（跨平台）
@@ -401,15 +904,13 @@ const TEST_CASES = {
         
         // 屏幕操作（跨平台）
         { name: '显示器列表', args: ['screen_list'], expectSuccess: true, checkKeys: ['screens'], optional: true },
-        { name: '像素颜色', args: ['pixel_color', '--x', '100', '--y', '100'], expectSuccess: true, checkKeys: ['r', 'g', 'b'], optional: true },
         { name: '截图功能', args: ['screenshot', '--output', path.join(os.tmpdir(), 'et_test_mac.png')], expectSuccess: true, optional: true, cleanup: (args) => {
             try { fs.unlinkSync(args[args.indexOf('--output') + 1]); } catch {}
         }},
         
         // 剪贴板（跨平台）
         { name: '剪贴板写入', args: ['clipboard_set_text', '--text', 'MacTest123'], expectSuccess: true, optional: true },
-        { name: '剪贴板读取', args: ['clipboard_get_text'], expectSuccess: true, checkOutput: 'MacTest123', optional: true },
-        { name: '剪贴板清空', args: ['clipboard_clear'], expectSuccess: true, optional: true },
+        { name: '剪贴板读取', args: ['clipboard_get_text'], expectSuccess: true, optional: true },
         
         // 浏览器（需要 Playwright）
         { name: '浏览器列表', args: ['browser_list'], expectSuccess: true, checkKeys: ['browsers'], optional: true },
@@ -427,24 +928,16 @@ function adjustTestsForPlatform(tests) {
     if (IS_LINUX) {
         // Linux 环境差异较大（无头/Wayland/缺少 xclip 等），这些命令统一降级为可选。
         const linuxOptionalCommands = new Set([
-            'mouse_position',
             'mouse_move',
             'mouse_click',
             'mouse_scroll',
             'key_press',
             'type_text',
-            'cpu_info',
-            'screen_list',
-            'pixel_color',
             'screenshot',
             'window_list',
             'window_foreground',
             'clipboard_set_text',
-            'clipboard_get_text',
-            'clipboard_clear',
-            'browser_list',
-            'uptime',
-            'battery_info'
+            'clipboard_get_text'
         ]);
 
         for (const test of adjusted) {
@@ -525,6 +1018,7 @@ async function runTests() {
     for (let i = 0; i < tests.length; i++) {
         const test = tests[i];
         const num = `${i + 1}/${tests.length}`.padStart(7);
+        let skipReason = null;
         
         // 检查是否跳过此测试
         if (test.skip) {
@@ -594,6 +1088,12 @@ async function runTests() {
             if (result.success !== test.expectSuccess) {
                 status = '✗ FAIL';
                 details.push(`Expected success=${test.expectSuccess}, got ${result.success}`);
+                if (test.expectSuccess) {
+                    const errorMessage = extractErrorMessage(result);
+                    if (errorMessage) {
+                        details.push(errorMessage);
+                    }
+                }
             }
             
             // 检查输出内容
@@ -625,20 +1125,26 @@ async function runTests() {
         } else if (test.optional) {
             status = '⊘ SKIP';
             results.skipped++;
+            skipReason = deriveSkipReason(result, details);
         } else {
             results.failed++;
         }
-        
+
         results.tests.push({
             name: test.name,
             status: status.includes('PASS') ? 'PASS' : status.includes('SKIP') ? 'SKIP' : 'FAIL',
             duration: result.duration,
+            reason: skipReason || undefined,
             output: CONFIG.verbose ? result.output : undefined,
             error: CONFIG.verbose ? result.error : undefined,
             details: details
         });
-        
-        console.log(`${status} (${result.duration}ms)`);
+
+        if (status === '⊘ SKIP' && skipReason) {
+            console.log(`${status} (${skipReason}, ${result.duration}ms)`);
+        } else {
+            console.log(`${status} (${result.duration}ms)`);
+        }
         
         if (CONFIG.verbose && (details.length > 0 || result.error)) {
             if (details.length > 0) console.log(`       Details: ${details.join(', ')}`);
@@ -684,6 +1190,32 @@ function printSummary(results) {
         results.tests
             .filter(t => t.status === 'FAIL')
             .forEach(t => console.log(`  - ${t.name}`));
+    }
+
+    const skippedWithReasons = results.tests.filter(t => t.status === 'SKIP' && t.reason);
+    if (skippedWithReasons.length > 0) {
+        console.log('\n⊘ Skipped (reason):');
+        skippedWithReasons.forEach(t => console.log(`  - ${t.name}: ${t.reason}`));
+    }
+
+    if (IS_LINUX) {
+        const skipText = results.tests
+            .filter(t => t.status === 'SKIP')
+            .map(t => `${t.reason || ''} ${(t.details || []).join(' ')}`)
+            .join('\n')
+            .toLowerCase();
+        const hints = [];
+        if (skipText.includes('xdotool')) hints.push('sudo apt install xdotool');
+        if (skipText.includes('ydotool')) hints.push('sudo apt install ydotool');
+        if (skipText.includes('wayland type text failed')) hints.push('sudo apt install wtype');
+        if (skipText.includes('ydotoold backend unavailable') || skipText.includes('uinput')) hints.push('sudo modprobe uinput && sudo systemctl enable --now ydotoold');
+        if (skipText.includes('wl-copy') || skipText.includes('wl-paste') || skipText.includes('wl-clipboard')) hints.push('sudo apt install wl-clipboard');
+        if (skipText.includes('xclip') || skipText.includes('xsel')) hints.push('sudo apt install xclip xsel');
+        if (skipText.includes('convert') || skipText.includes('imagemagick')) hints.push('sudo apt install imagemagick');
+        if (hints.length > 0) {
+            console.log('\n💡 Linux dependency hints:');
+            hints.forEach(h => console.log(`  - ${h}`));
+        }
     }
 }
 

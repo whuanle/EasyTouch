@@ -159,6 +159,16 @@ public static class KeyboardModule
 
     private static Response TypeTextWayland(TypeTextRequest request)
     {
+        if (CommandExists("wtype"))
+        {
+            return TypeTextWaylandWithWtype(request);
+        }
+
+        if (!CommandExists("ydotool"))
+        {
+            return new ErrorResponse("Wayland type text failed: missing dependency. Install wtype (recommended) or ydotool.");
+        }
+
         try
         {
             if (request.HumanLike && request.Interval > 0)
@@ -178,7 +188,41 @@ public static class KeyboardModule
         }
         catch (Exception ex)
         {
+            if (IsYdotoolBackendIssue(ex.Message))
+            {
+                return new ErrorResponse("Wayland type text failed: ydotoold unavailable or /dev/uinput permission denied. Install wtype (recommended), or configure ydotoold + uinput permissions.");
+            }
+
             return new ErrorResponse($"Wayland type text failed: {ex.Message}");
+        }
+    }
+
+    private static Response TypeTextWaylandWithWtype(TypeTextRequest request)
+    {
+        try
+        {
+            if (request.HumanLike && request.Interval > 0)
+            {
+                foreach (var c in request.Text)
+                {
+                    RunCommand("wtype", $"-- \"{EscapeText(c.ToString())}\"");
+                    Thread.Sleep(request.Interval);
+                }
+            }
+            else if (request.Interval > 0)
+            {
+                RunCommand("wtype", $"-d {request.Interval} -- \"{EscapeText(request.Text)}\"");
+            }
+            else
+            {
+                RunCommand("wtype", $"-- \"{EscapeText(request.Text)}\"");
+            }
+
+            return new SuccessResponse();
+        }
+        catch (Exception ex)
+        {
+            return new ErrorResponse($"Wayland type text (wtype) failed: {ex.Message}");
         }
     }
 
@@ -214,6 +258,35 @@ public static class KeyboardModule
     private static bool IsWayland()
     {
         return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+    }
+
+    private static bool CommandExists(string command)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "which",
+                Arguments = command,
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            };
+
+            using var process = Process.Start(psi);
+            process?.WaitForExit();
+            return process?.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsYdotoolBackendIssue(string message)
+    {
+        var lower = message.ToLowerInvariant();
+        return lower.Contains("ydotoold backend unavailable") ||
+               lower.Contains("failed to open uinput device");
     }
 
     private static void RunXdotool(string arguments)

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EasyTouch.Browser;
 using EasyTouch.Core.Models;
 using EasyTouch.Modules;
 
@@ -19,6 +20,13 @@ public static class CliHost
         {
             var command = args[0].ToLowerInvariant();
             var subArgs = args.Skip(1).ToArray();
+
+            if (BrowserDaemonClient.ShouldProxy(command))
+            {
+                var proxyResult = BrowserDaemonClient.Execute(command, subArgs);
+                Console.WriteLine(proxyResult.Json);
+                return proxyResult.Success ? 0 : 1;
+            }
 
             Response result;
             
@@ -134,6 +142,8 @@ public static class CliHost
             "os_info" => SystemModule.GetOsInfo(),
             "cpu_info" => SystemModule.GetCpuInfo(),
             "memory_info" => SystemModule.GetMemoryInfo(),
+            "uptime" => SystemModule.GetUptime(),
+            "battery_info" => SystemModule.GetBatteryInfo(),
             "disk_list" => SystemModule.ListDisks(),
             "process_list" => SystemModule.ListProcesses(new ProcessListRequest
             {
@@ -216,7 +226,7 @@ public static class CliHost
                 OutputPath = GetStringOption(options, "output", null),
                 Type = GetStringOption(options, "type", "png")!,
                 FullPage = GetBoolOption(options, "full-page", false),
-                Quality = GetIntOption(options, "quality", 80)
+                Quality = GetNullableIntOption(options, "quality")
             }),
             "browser_evaluate" => BrowserModule.Evaluate(new BrowserEvaluateRequest
             {
@@ -317,6 +327,8 @@ public static class CliHost
                 Force = GetBoolOption(options, "force", false)
             }),
             "browser_list" => BrowserModule.List(new BrowserListRequest()),
+            "browser_daemon_status" => BrowserDaemonClient.GetStatusResponse(),
+            "browser_daemon_stop" => BrowserDaemonClient.StopDaemonResponse(),
 
             _ => new ErrorResponse($"Unknown command: {command}")
         };
@@ -458,10 +470,11 @@ public static class CliHost
         Console.WriteLine("  window_find [--title <text>] [--class <name>] [--pid <n>]");
         Console.WriteLine("  window_activate --title <text> | --handle <n>");
         Console.WriteLine("  window_foreground");
-        Console.WriteLine("  os_info, cpu_info, memory_info, disk_list");
+        Console.WriteLine("  os_info, cpu_info, memory_info, uptime, battery_info, disk_list");
         Console.WriteLine("  process_list [--filter <text>]");
         Console.WriteLine("  clipboard_get_text, clipboard_set_text --text <text>");
         Console.WriteLine("  browser_* (launch/navigate/click/fill/find/wait/assert/screenshot/cookies/run_script)");
+        Console.WriteLine("  browser_daemon_status, browser_daemon_stop");
         Console.WriteLine("  volume_get, volume_set --level <0-100>");
         Console.WriteLine();
         Console.WriteLine("  help       Show this help");
@@ -479,13 +492,20 @@ public static class CliHost
 
     private static void PrintResult(Response result)
     {
+        Console.WriteLine(SerializeResponseForOutput(result));
+    }
+
+    internal static Response ExecuteCommandForDaemon(string command, string[] args) => HandleDirectCommand(command, args);
+
+    internal static string SerializeResponseForOutput(Response result)
+    {
         var options = new JsonSerializerOptions
         {
             WriteIndented = false,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
-        
-        Console.WriteLine(JsonSerializer.Serialize(result, result.GetType(), options));
+
+        return JsonSerializer.Serialize(result, result.GetType(), options);
     }
 }

@@ -249,8 +249,13 @@ et --version
 - 检查输出目录是否有写入权限
 
 **Linux:**
-- 需要 X11 显示服务器（不支持 Wayland）
-- 确保 `DISPLAY` 环境变量已设置
+- 官方验证环境为 Ubuntu Desktop（22.04/24.04）
+- 可手动安装依赖：
+  ```bash
+  sudo apt install xdotool xclip xsel imagemagick gnome-screenshot
+  sudo apt install ydotool wl-clipboard grim   # Wayland 按需
+  ```
+- 确保 `DISPLAY`（X11）或 Wayland 会话环境变量已设置
 
 **macOS:**
 - 在"系统偏好设置" → "安全性与隐私" → "屏幕录制"中授权终端应用

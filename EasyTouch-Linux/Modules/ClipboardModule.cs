@@ -5,32 +5,29 @@ namespace EasyTouch.Modules;
 
 public static class ClipboardModule
 {
+    private const int ClipboardCommandTimeoutMs = 5000;
+
     public static Response GetText(ClipboardGetTextRequest request)
     {
         try
         {
             string text;
             
-            if (IsWayland())
+            if (IsWayland() && CommandExists("wl-paste"))
             {
-                // Try wl-copy/wl-paste for Wayland
                 text = RunCommand("wl-paste", "");
+            }
+            else if (CommandExists("xclip"))
+            {
+                text = RunCommand("xclip", "-selection clipboard -o");
+            }
+            else if (CommandExists("xsel"))
+            {
+                text = RunCommand("xsel", "-b -o");
             }
             else
             {
-                // Try xclip for X11
-                if (CommandExists("xclip"))
-                {
-                    text = RunCommand("xclip", "-selection clipboard -o");
-                }
-                else if (CommandExists("xsel"))
-                {
-                    text = RunCommand("xsel", "-b -o");
-                }
-                else
-                {
-                    return new ErrorResponse("No clipboard tool found. Please install xclip or xsel.");
-                }
+                return new ErrorResponse(GetMissingClipboardToolMessage());
             }
             
             return new SuccessResponse<ClipboardGetTextResponse>(new ClipboardGetTextResponse { Text = text });
@@ -45,26 +42,21 @@ public static class ClipboardModule
     {
         try
         {
-            if (IsWayland())
+            if (IsWayland() && CommandExists("wl-copy"))
             {
-                // Use wl-copy for Wayland
-                RunCommandWithInput("wl-copy", "", request.Text);
+                RunWlCopyText(request.Text);
+            }
+            else if (CommandExists("xclip"))
+            {
+                RunCommandWithInput("xclip", "-selection clipboard", request.Text);
+            }
+            else if (CommandExists("xsel"))
+            {
+                RunCommandWithInput("xsel", "-b -i", request.Text);
             }
             else
             {
-                // Try xclip for X11
-                if (CommandExists("xclip"))
-                {
-                    RunCommandWithInput("xclip", "-selection clipboard", request.Text);
-                }
-                else if (CommandExists("xsel"))
-                {
-                    RunCommandWithInput("xsel", "-b -i", request.Text);
-                }
-                else
-                {
-                    return new ErrorResponse("No clipboard tool found. Please install xclip or xsel.");
-                }
+                return new ErrorResponse(GetMissingClipboardToolMessage());
             }
             
             return new SuccessResponse();
@@ -79,24 +71,21 @@ public static class ClipboardModule
     {
         try
         {
-            if (IsWayland())
+            if (IsWayland() && CommandExists("wl-copy"))
             {
-                RunCommand("wl-copy", "--clear");
+                RunWlCopyClear();
+            }
+            else if (CommandExists("xclip"))
+            {
+                RunCommandWithInput("xclip", "-selection clipboard", "");
+            }
+            else if (CommandExists("xsel"))
+            {
+                RunCommand("xsel", "-b -c");
             }
             else
             {
-                if (CommandExists("xclip"))
-                {
-                    RunCommandWithInput("xclip", "-selection clipboard", "");
-                }
-                else if (CommandExists("xsel"))
-                {
-                    RunCommand("xsel", "-b -c");
-                }
-                else
-                {
-                    return new ErrorResponse("No clipboard tool found");
-                }
+                return new ErrorResponse(GetMissingClipboardToolMessage());
             }
             
             return new SuccessResponse();
@@ -116,26 +105,23 @@ public static class ClipboardModule
             
             // Check for text/uri-list format
             string output;
-            if (IsWayland())
+            if (IsWayland() && CommandExists("wl-paste"))
             {
                 output = RunCommand("wl-paste", "--list-types");
             }
+            else if (CommandExists("xclip"))
+            {
+                output = RunCommand("xclip", "-selection clipboard -t TARGETS -o");
+            }
             else
             {
-                if (CommandExists("xclip"))
-                {
-                    output = RunCommand("xclip", "-selection clipboard -t TARGETS -o");
-                }
-                else
-                {
-                    return new SuccessResponse<ClipboardGetFilesResponse>(new ClipboardGetFilesResponse { Files = files });
-                }
+                return new SuccessResponse<ClipboardGetFilesResponse>(new ClipboardGetFilesResponse { Files = files });
             }
             
             if (output.Contains("text/uri-list"))
             {
                 string uris;
-                if (IsWayland())
+                if (IsWayland() && CommandExists("wl-paste"))
                 {
                     uris = RunCommand("wl-paste", "-t text/uri-list");
                 }
@@ -160,6 +146,11 @@ public static class ClipboardModule
         {
             return new ErrorResponse($"Get clipboard files failed: {ex.Message}");
         }
+    }
+
+    private static string GetMissingClipboardToolMessage()
+    {
+        return "No clipboard tool found. Install wl-clipboard (wl-copy/wl-paste) or xclip/xsel.";
     }
 
     private static bool IsWayland()
@@ -199,18 +190,40 @@ public static class ClipboardModule
             RedirectStandardError = true,
             UseShellExecute = false
         };
-        
+
         using var process = Process.Start(psi);
         if (process == null)
             throw new InvalidOperationException($"Failed to start {command}");
-        
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
+
+        var stdout = new System.Text.StringBuilder();
+        var stderr = new System.Text.StringBuilder();
+
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data != null) stdout.AppendLine(e.Data);
+        };
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null) stderr.AppendLine(e.Data);
+        };
+
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        if (!process.WaitForExit(ClipboardCommandTimeoutMs))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new Exception($"{command} timed out");
+        }
+
         process.WaitForExit();
-        
-        if (process.ExitCode != 0 && !string.IsNullOrEmpty(error))
-            throw new Exception($"{command} failed: {error}");
-        
+
+        var output = stdout.ToString();
+        var error = stderr.ToString();
+
+        if (process.ExitCode != 0)
+            throw new Exception(!string.IsNullOrWhiteSpace(error) ? $"{command} failed: {error}" : $"{command} failed with exit code {process.ExitCode}");
+
         return output;
     }
 
@@ -229,14 +242,104 @@ public static class ClipboardModule
         using var process = Process.Start(psi);
         if (process == null)
             throw new InvalidOperationException($"Failed to start {command}");
-        
+
+        var stderr = new System.Text.StringBuilder();
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null) stderr.AppendLine(e.Data);
+        };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
         process.StandardInput.Write(input);
         process.StandardInput.Close();
-        
-        var error = process.StandardError.ReadToEnd();
+
+        if (!process.WaitForExit(ClipboardCommandTimeoutMs))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new Exception($"{command} timed out");
+        }
+
         process.WaitForExit();
-        
-        if (process.ExitCode != 0 && !string.IsNullOrEmpty(error))
-            throw new Exception($"{command} failed: {error}");
+
+        if (process.ExitCode != 0)
+        {
+            var error = stderr.ToString();
+            throw new Exception(!string.IsNullOrWhiteSpace(error) ? $"{command} failed: {error}" : $"{command} failed with exit code {process.ExitCode}");
+        }
+    }
+
+    private static void RunWlCopyText(string input)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "wl-copy",
+            Arguments = "",
+            RedirectStandardInput = true,
+            // Redirect output streams so wl-copy background process does not keep
+            // the parent CLI stdout/stderr pipes open.
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null)
+            throw new InvalidOperationException("Failed to start wl-copy");
+
+        var stderr = new System.Text.StringBuilder();
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null) stderr.AppendLine(e.Data);
+        };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        process.StandardInput.Write(input);
+        process.StandardInput.Close();
+
+        // wl-copy usually forks to background and keeps clipboard ownership.
+        // Do not wait for full exit to avoid blocking the caller.
+        if (process.WaitForExit(300) && process.ExitCode != 0)
+        {
+            var error = stderr.ToString();
+            throw new Exception(!string.IsNullOrWhiteSpace(error)
+                ? $"wl-copy failed: {error}"
+                : $"wl-copy failed with exit code {process.ExitCode}");
+        }
+    }
+
+    private static void RunWlCopyClear()
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "wl-copy",
+            Arguments = "--clear",
+            // Redirect output streams so wl-copy background process does not keep
+            // the parent CLI stdout/stderr pipes open.
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null)
+            throw new InvalidOperationException("Failed to start wl-copy");
+
+        var stderr = new System.Text.StringBuilder();
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null) stderr.AppendLine(e.Data);
+        };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        if (process.WaitForExit(300) && process.ExitCode != 0)
+        {
+            var error = stderr.ToString();
+            throw new Exception(!string.IsNullOrWhiteSpace(error)
+                ? $"wl-copy --clear failed: {error}"
+                : $"wl-copy --clear failed with exit code {process.ExitCode}");
+        }
     }
 }
