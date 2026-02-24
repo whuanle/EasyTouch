@@ -23,6 +23,7 @@ jobs:
             runtime: win-x64
             ext: .exe
             output_name: et-windows-x64.exe
+            archive_name: et-windows-x64.zip
           
           # Linux
           - os: ubuntu-latest
@@ -30,6 +31,7 @@ jobs:
             runtime: linux-x64
             ext: ""
             output_name: et-linux-x64
+            archive_name: et-linux-x64.tar.gz
           
           # macOS Intel
           - os: macos-latest
@@ -37,6 +39,7 @@ jobs:
             runtime: osx-x64
             ext: ""
             output_name: et-macos-x64
+            archive_name: et-macos-x64.tar.gz
           
           # macOS Apple Silicon
           - os: macos-latest
@@ -44,6 +47,7 @@ jobs:
             runtime: osx-arm64
             ext: ""
             output_name: et-macos-arm64
+            archive_name: et-macos-arm64.tar.gz
 
     runs-on: ${{ matrix.os }}
 
@@ -72,11 +76,51 @@ jobs:
           mv ${{ matrix.project }}/bin/Release/net10.0/${{ matrix.runtime }}/publish/et ${{ matrix.project }}/bin/Release/net10.0/${{ matrix.runtime }}/publish/${{ matrix.output_name }}
           chmod +x ${{ matrix.project }}/bin/Release/net10.0/${{ matrix.runtime }}/publish/${{ matrix.output_name }}
 
+      - name: Create release package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $publishDir = "${{ matrix.project }}\bin\Release\net10.0\${{ matrix.runtime }}\publish"
+          $packageDir = Join-Path $publishDir "package"
+          New-Item -ItemType Directory -Path $packageDir -Force | Out-Null
+          Copy-Item (Join-Path $publishDir "${{ matrix.output_name }}") (Join-Path $packageDir "${{ matrix.output_name }}") -Force
+
+          if (Test-Path "scripts\playwright-bridge.js") {
+            New-Item -ItemType Directory -Path (Join-Path $packageDir "scripts") -Force | Out-Null
+            Copy-Item "scripts\playwright-bridge.js" (Join-Path $packageDir "scripts\playwright-bridge.js") -Force
+          }
+
+          if (Test-Path "README.md") {
+            Copy-Item "README.md" (Join-Path $packageDir "README.md") -Force
+          }
+
+          Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath (Join-Path $publishDir "${{ matrix.archive_name }}") -Force
+
+      - name: Create release package (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          publish_dir="${{ matrix.project }}/bin/Release/net10.0/${{ matrix.runtime }}/publish"
+          package_dir="$publish_dir/package"
+          mkdir -p "$package_dir"
+          cp "$publish_dir/${{ matrix.output_name }}" "$package_dir/${{ matrix.output_name }}"
+
+          if [ -f "scripts/playwright-bridge.js" ]; then
+            mkdir -p "$package_dir/scripts"
+            cp "scripts/playwright-bridge.js" "$package_dir/scripts/playwright-bridge.js"
+          fi
+
+          if [ -f "README.md" ]; then
+            cp "README.md" "$package_dir/README.md"
+          fi
+
+          tar -C "$package_dir" -czf "$publish_dir/${{ matrix.archive_name }}" .
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.output_name }}
-          path: ${{ matrix.project }}/bin/Release/net10.0/${{ matrix.runtime }}/publish/${{ matrix.output_name }}
+          name: ${{ matrix.archive_name }}
+          path: ${{ matrix.project }}/bin/Release/net10.0/${{ matrix.runtime }}/publish/${{ matrix.archive_name }}
           retention-days: 30
 
   release:
